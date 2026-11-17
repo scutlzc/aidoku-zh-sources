@@ -1,7 +1,12 @@
 use aidoku::{
 	alloc::{string::String, string::ToString, vec::Vec},
 	helpers::uri::encode_uri,
-	imports::{html::Document, net::Request},
+	imports::{
+		defaults::{defaults_get, defaults_set, DefaultValue},
+		html::Document,
+		net::Request,
+		std::current_date,
+	},
 	prelude::*,
 	Result,
 };
@@ -10,6 +15,8 @@ use serde_json::Value;
 use crate::crypto;
 
 const WWW_URL: &str = "https://www.mangacopy.com";
+const API_VERSION: &str = "3.0.0";
+const TOKEN_KEY: &str = "token";
 const API_URL: &str = "https://api.mangacopy.com/api/v3";
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
@@ -40,19 +47,6 @@ fn hex_decode(text: &str) -> Option<Vec<u8>> {
 	Some(result)
 }
 
-pub fn substring_after(text: &str, pattern: &str) -> Option<String> {
-	text.find(pattern)
-		.map(|index| text[index + pattern.len()..].to_string())
-}
-
-pub fn substring_before(text: &str, pattern: &str) -> Option<String> {
-	text.find(pattern).map(|index| text[..index].to_string())
-}
-
-pub fn between(text: &str, start: &str, end: &str) -> Option<String> {
-	substring_after(text, start).and_then(|text| substring_before(&text, end))
-}
-
 pub fn decrypt(text: String, key: String) -> Result<String> {
 	let text_bytes = text.as_bytes();
 
@@ -73,32 +67,163 @@ pub fn decrypt(text: String, key: String) -> Result<String> {
 }
 
 pub fn get_text(url: String) -> Result<String> {
-	Request::get(url.as_str())?
-		.header("User-Agent", UA)
-		.string()
+	let request = Request::get(url.as_str())?.header("User-Agent", UA);
+
+	with_auth(request).string()
 }
 
 pub fn get_html(url: String) -> Result<Document> {
-	Ok(Request::get(url.as_str())?
-		.header("User-Agent", UA)
-		.html()?)
+	let request = Request::get(url.as_str())?.header("User-Agent", UA);
+
+	Ok(with_auth(request).html()?)
+}
+
+fn token() -> Option<String> {
+	defaults_get::<String>(TOKEN_KEY).filter(|token| !token.is_empty())
+}
+
+fn with_auth(request: Request) -> Request {
+	match token() {
+		Some(token) => {
+			let value = format!("Token {token}");
+			request.header("Authorization", value.as_str())
+		}
+		None => request,
+	}
 }
 
 pub fn get_json(url: String) -> Result<Value> {
-	let request = Request::get(url.as_str())?;
-
 	let request = if url.starts_with(WWW_URL) {
-		request.header("User-Agent", UA)
+		Request::get(url.as_str())?.header("User-Agent", UA)
 	} else {
-		request
-			.header("User-Agent", "COPY/2.3.1")
-			.header("version", "2.3.1")
+		Request::get(url.as_str())?
+			.header("User-Agent", "COPY/3.0.0")
+			.header("version", API_VERSION)
 			.header("platform", "3")
 			.header("region", "1")
 			.header("webp", "1")
 	};
 
-	request.json_owned::<Value>()
+	with_auth(request).json_owned::<Value>()
+}
+
+/// 章节列表接口要求 JSON 内容协商。
+pub fn get_chapter_list_json(url: String) -> Result<Value> {
+	let dnts = String::from("9");
+	let request = Request::get(url.as_str())?
+		.header("User-Agent", UA)
+		.header("Accept", "application/json")
+		.header("dnts", dnts.as_str());
+
+	with_auth(request).json_owned::<Value>()
+}
+
+/// 提取页面内联脚本中第一个 `var x = '...'` 的单引号值。
+///
+/// 站点会轮换变量名（ccz/cct/...），因此不能按变量名匹配。
+pub fn script_var(text: &str) -> Option<String> {
+	let mut rest = text;
+
+	while let Some(start) = rest.find("<script") {
+		let block_start = start + rest[start..].find('>')? + 1;
+		let block = &rest[block_start..];
+		let end = block.find("</script>")?;
+		let block = &block[..end];
+
+		if block.contains("var ") && block.contains('\'') {
+			let mut parts = block.split('\'');
+			parts.next();
+			if let Some(value) = parts.next() {
+				if !value.is_empty() {
+					return Some(value.to_string());
+				}
+			}
+		}
+
+		rest = &rest[block_start + end..];
+	}
+
+	None
+}
+
+/// 取标记之后第一个单引号字符串的值。
+pub fn quoted_after(text: &str, marker: &str) -> Option<String> {
+	let start = text.find(marker)? + marker.len();
+	let rest = &text[start..];
+	let open = rest.find('\'')?;
+	let after = &rest[open + 1..];
+	let end = after.find('\'')?;
+
+	Some(after[..end].to_string())
+}
+
+fn base64_encode(input: &[u8]) -> String {
+	const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+	let mut output = String::new();
+
+	for chunk in input.chunks(3) {
+		let first = chunk[0] as u32;
+		let second = chunk.get(1).copied().unwrap_or_default() as u32;
+		let third = chunk.get(2).copied().unwrap_or_default() as u32;
+		let bits = (first << 16) | (second << 8) | third;
+
+		output.push(TABLE[(bits >> 18) as usize & 0x3f] as char);
+		output.push(TABLE[(bits >> 12) as usize & 0x3f] as char);
+		output.push(if chunk.len() > 1 {
+			TABLE[(bits >> 6) as usize & 0x3f] as char
+		} else {
+			'='
+		});
+		output.push(if chunk.len() > 2 {
+			TABLE[bits as usize & 0x3f] as char
+		} else {
+			'='
+		});
+	}
+
+	output
+}
+
+/// 用账号密码登录站点并保存 token。
+pub fn login(username: &str, password: &str) -> Result<()> {
+	let salt = current_date().rem_euclid(900_000) + 100_000;
+	let encoded = base64_encode(format!("{password}-{salt}").as_bytes());
+	let body = format!(
+		"username={}&password={}&salt={salt}&platform=2&version=1.0.0&source=copyweb",
+		encode_uri(username),
+		encode_uri(&encoded),
+	);
+	let url = format!("{WWW_URL}/api/v1/login");
+
+	let json = Request::post(url.as_str())?
+		.header(
+			"Content-Type",
+			"application/x-www-form-urlencoded;charset=UTF-8",
+		)
+		.header("X-Requested-With", "XMLHttpRequest")
+		.header("Accept", "application/json")
+		.body(body)
+		.json_owned::<Value>()?;
+
+	let code = json.get("code").and_then(Value::as_i64).unwrap_or_default();
+	if code != 200 {
+		let message = json
+			.get("message")
+			.and_then(Value::as_str)
+			.unwrap_or("未知錯誤");
+		bail!("登入失敗：{message}");
+	}
+
+	let token = json
+		.get("results")
+		.and_then(|results| results.get("token"))
+		.and_then(Value::as_str)
+		.ok_or(error!("登入回應缺少 token"))?;
+
+	defaults_set(TOKEN_KEY, DefaultValue::String(token.to_string()));
+
+	Ok(())
 }
 
 pub fn gen_explore_url(theme: String, top: String, ordering: String, page: i32) -> String {

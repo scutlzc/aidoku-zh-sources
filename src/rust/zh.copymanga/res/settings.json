@@ -1,0 +1,15 @@
+[
+  {
+    "type": "group",
+    "title": "帳號",
+    "footer": "章節與圖片需要登入後才能讀取。",
+    "items": [
+      {
+        "type": "login",
+        "key": "login",
+        "method": "basic",
+        "title": "登入拷貝漫畫"
+      }
+    ]
+  }
+]

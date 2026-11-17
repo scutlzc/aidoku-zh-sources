@@ -108,9 +108,9 @@
     {
       "id": "zh.copymanga",
       "name": "拷贝漫画",
-      "version": 13,
-      "iconURL": "icons/zh.copymanga-v13.png",
-      "downloadURL": "sources/zh.copymanga-v13.aix",
+      "version": 14,
+      "iconURL": "icons/zh.copymanga-v14.png",
+      "downloadURL": "sources/zh.copymanga-v14.aix",
       "languages": [
         "zh"
       ],

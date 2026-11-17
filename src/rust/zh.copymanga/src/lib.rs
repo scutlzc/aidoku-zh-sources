@@ -3,8 +3,8 @@
 use aidoku::{
 	alloc::{string::String, vec::Vec},
 	prelude::*,
-	Chapter, ContentRating, FilterValue, Listing, ListingProvider, Manga, MangaPageResult,
-	MangaStatus, Page, Result, Source, Viewer,
+	BasicLoginHandler, Chapter, ContentRating, FilterValue, Listing, ListingProvider, Manga,
+	MangaPageResult, MangaStatus, Page, Result, Source, Viewer,
 };
 use serde_json::Value;
 
@@ -145,10 +145,10 @@ impl Source for Copymanga {
 		if needs_chapters {
 			let manga_url = helper::gen_manga_url(manga.key.clone());
 			let text = helper::get_text(manga_url)?;
-			let key = helper::between(&text, "var ccx = '", "'")
-				.ok_or(error!("Failed to find chapter decryption key"))?;
+			let key = helper::script_var(&text)
+				.ok_or(error!("找不到章節解密金鑰，站點頁面結構可能已變更"))?;
 			let url = helper::gen_chapter_list_url(manga.key.clone());
-			let json = helper::get_json(url)?;
+			let json = helper::get_chapter_list_json(url)?;
 			let data = json
 				.get("results")
 				.and_then(|data| data.as_str())
@@ -166,10 +166,13 @@ impl Source for Copymanga {
 	fn get_page_list(&self, manga: Manga, chapter: Chapter) -> Result<Vec<Page>> {
 		let url = helper::gen_page_list_url(manga.key, chapter.key);
 		let text = helper::get_text(url)?;
-		let key = helper::between(&text, "var ccy = '", "'")
-			.ok_or(error!("Failed to find page decryption key"))?;
-		let data = helper::between(&text, "contentKey=\"", "\"")
-			.ok_or(error!("Failed to find encrypted page list"))?;
+		let key = helper::script_var(&text)
+			.ok_or(error!("找不到章節解密金鑰，站點頁面結構可能已變更"))?;
+		let data = helper::quoted_after(&text, "var contentKey")
+			.ok_or(error!("找不到圖片資料，站點頁面結構可能已變更"))?;
+		if data.is_empty() {
+			bail!("站點目前要求登入後才能閱讀，請在圖源設定中登入拷貝漫畫帳號");
+		}
 		let data = helper::decrypt(data, key)?;
 		let data: Value =
 			serde_json::from_str(&data).map_err(|_| error!("Failed to parse page list"))?;
@@ -215,4 +218,21 @@ impl ListingProvider for Copymanga {
 	}
 }
 
-register_source!(Copymanga, ListingProvider);
+impl BasicLoginHandler for Copymanga {
+	fn handle_basic_login(
+		&self,
+		key: String,
+		_username: String,
+		_password: String,
+	) -> Result<bool> {
+		if key != "login" {
+			return Ok(false);
+		}
+
+		helper::login(&_username, &_password)?;
+
+		Ok(true)
+	}
+}
+
+register_source!(Copymanga, ListingProvider, BasicLoginHandler);
