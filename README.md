@@ -26,7 +26,7 @@ Aidoku 中文图源
 - [包子漫画2](https://baozimh.org)
 - [哔哩漫画](https://www.bilimanga.net)
 - [动漫狂](https://www.cartoonmad.com)
-- [拷贝漫画](https://www.mangacopy.com)
+- [拷贝漫画](https://www.mangacopy.com)（需在源设置里登入账号才能看章节与图片，站点已限制未登入阅读）
 - [G站漫画](https://godamh.com)
 - [古风漫画](https://www.gufengmh.com)
 - [Hanime1.me](https://hanime1.me/comics)
