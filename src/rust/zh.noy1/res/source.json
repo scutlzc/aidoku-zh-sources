@@ -1,32 +1,42 @@
 {
   "info": {
     "id": "zh.noy1",
-    "lang": "zh",
     "name": "NoyAcg",
-    "version": 3,
+    "version": 4,
+    "minAppVersion": "0.7",
     "url": "https://noy1.top",
-    "nsfw": 2
+    "contentRating": 2,
+    "languages": [
+      "zh"
+    ]
   },
   "listings": [
     {
+      "id": "day-read",
       "name": "日阅读榜"
     },
     {
+      "id": "week-read",
       "name": "周阅读榜"
     },
     {
+      "id": "month-read",
       "name": "月阅读榜"
     },
     {
+      "id": "day-fav",
       "name": "日收藏榜"
     },
     {
+      "id": "week-fav",
       "name": "周收藏榜"
     },
     {
+      "id": "month-fav",
       "name": "月收藏榜"
     },
     {
+      "id": "proportion",
       "name": "高质量榜"
     }
   ]

@@ -1,10 +1,8 @@
 [
   {
-    "type": "title"
-  },
-  {
     "type": "select",
-    "name": "分类",
+    "id": "subject",
+    "title": "分类",
     "options": [
       "全部",
       "爱情",
@@ -52,23 +50,105 @@
       "架空",
       "穿越",
       "同人"
+    ],
+    "ids": [
+      "all",
+      "aiqing",
+      "youmo",
+      "maoxian",
+      "xiaoyuan",
+      "shaonyu",
+      "shenghuo",
+      "rexue",
+      "kehuan",
+      "jingji",
+      "gedou",
+      "kongbu",
+      "shengcun",
+      "xuanyi",
+      "zhentan",
+      "lishi",
+      "zhanzheng",
+      "lizhi",
+      "zhichang",
+      "meishi",
+      "jizhan",
+      "mohuan",
+      "mofa",
+      "qihuan",
+      "shengui",
+      "wuxia",
+      "xianxia",
+      "zhiyu",
+      "mengxi",
+      "zhaixi",
+      "qingnian",
+      "shaonian",
+      "hougong",
+      "baihe",
+      "weiniang",
+      "danmei",
+      "tonghua",
+      "dongfang",
+      "sige",
+      "huiben",
+      "yishu",
+      "zazhi",
+      "lianhuanhua",
+      "jiakong",
+      "chuanyue",
+      "tongren"
     ]
   },
   {
     "type": "select",
-    "name": "地区",
-    "options": ["全部", "国漫", "日漫", "韩漫", "欧美", "港台", "其他"]
+    "id": "area",
+    "title": "地区",
+    "options": [
+      "全部",
+      "国漫",
+      "日漫",
+      "韩漫",
+      "欧美",
+      "港台",
+      "其他"
+    ],
+    "ids": [
+      "all",
+      "china",
+      "japan",
+      "korea",
+      "ea",
+      "hktw",
+      "other"
+    ]
   },
   {
     "type": "select",
-    "name": "状态",
-    "options": ["全部", "连载", "完结", "停更"]
+    "id": "progress",
+    "title": "状态",
+    "options": [
+      "全部",
+      "连载",
+      "完结",
+      "停更"
+    ],
+    "ids": [
+      "all",
+      "updating",
+      "complate",
+      "stop"
+    ]
   },
   {
     "type": "sort",
-    "name": "排序",
+    "id": "sort",
+    "title": "排序",
     "canAscend": false,
-    "options": ["最热", "最新"],
+    "options": [
+      "最热",
+      "最新"
+    ],
     "default": {
       "index": 0,
       "ascending": false

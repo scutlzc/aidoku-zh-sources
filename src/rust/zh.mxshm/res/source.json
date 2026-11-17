@@ -1,10 +1,11 @@
 {
   "info": {
     "id": "zh.msxhm",
-    "lang": "zh",
     "name": "漫小肆韩漫",
-    "version": 6,
+    "version": 7,
+    "minAppVersion": "0.7",
     "url": "https://www.freexcomic.com",
-    "nsfw": 2
+    "contentRating": 2,
+    "languages": ["zh"]
   }
 }

@@ -1,12 +1,11 @@
 use aidoku::{
+	alloc::{string::String, string::ToString, vec::Vec},
 	helpers::uri::encode_uri,
+	imports::{html::Document, net::Request},
 	prelude::*,
-	std::{
-		html::Node,
-		net::{HttpMethod, Request},
-		ObjectRef, String,
-	},
+	Result,
 };
+use serde_json::Value;
 
 use crate::crypto;
 
@@ -14,33 +13,79 @@ const WWW_URL: &str = "https://www.mangacopy.com";
 const API_URL: &str = "https://api.mangacopy.com/api/v3";
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
-pub fn decrypt(text: String, key: String) -> String {
-	let text = text.as_bytes();
-	let key = key.as_bytes();
-	let key: &[u8; 16] = key.try_into().unwrap();
-	let iv = &text[..16];
-	let cipher = &text[16..];
-	let cipher = hex::decode(cipher).unwrap();
-	let pt = crypto::decrypt(&cipher, key, iv).unwrap();
-	String::from_utf8_lossy(&pt).replace("", "")
+fn hex_value(byte: u8) -> Option<u8> {
+	match byte {
+		b'0'..=b'9' => Some(byte - b'0'),
+		b'a'..=b'f' => Some(byte - b'a' + 10),
+		b'A'..=b'F' => Some(byte - b'A' + 10),
+		_ => None,
+	}
 }
 
-pub fn get_text(url: String) -> String {
-	Request::new(url.clone(), HttpMethod::Get)
+fn hex_decode(text: &str) -> Option<Vec<u8>> {
+	let bytes = text.as_bytes();
+
+	if bytes.len() % 2 != 0 {
+		return None;
+	}
+
+	let mut result: Vec<u8> = Vec::new();
+
+	for chunk in bytes.chunks(2) {
+		let high = hex_value(chunk[0])?;
+		let low = hex_value(chunk[1])?;
+		result.push((high << 4) | low);
+	}
+
+	Some(result)
+}
+
+pub fn substring_after(text: &str, pattern: &str) -> Option<String> {
+	text.find(pattern)
+		.map(|index| text[index + pattern.len()..].to_string())
+}
+
+pub fn substring_before(text: &str, pattern: &str) -> Option<String> {
+	text.find(pattern).map(|index| text[..index].to_string())
+}
+
+pub fn between(text: &str, start: &str, end: &str) -> Option<String> {
+	substring_after(text, start).and_then(|text| substring_before(&text, end))
+}
+
+pub fn decrypt(text: String, key: String) -> Result<String> {
+	let text_bytes = text.as_bytes();
+
+	if text_bytes.len() < 16 {
+		bail!("Invalid encrypted text");
+	}
+
+	let iv = &text_bytes[..16];
+	let cipher = hex_decode(&text[16..]).ok_or(error!("Invalid hex string"))?;
+	let key_bytes = key.as_bytes();
+	let key: &[u8; 16] = key_bytes
+		.try_into()
+		.map_err(|_| error!("Invalid decryption key"))?;
+	let plain = crypto::decrypt(&cipher, key, iv).map_err(|_| error!("Failed to decrypt"))?;
+	let text = String::from_utf8_lossy(&plain);
+
+	Ok(text.replace('\u{feff}', ""))
+}
+
+pub fn get_text(url: String) -> Result<String> {
+	Request::get(url.as_str())?
 		.header("User-Agent", UA)
 		.string()
-		.unwrap()
 }
 
-pub fn get_html(url: String) -> Node {
-	Request::new(url.clone(), HttpMethod::Get)
+pub fn get_html(url: String) -> Result<Document> {
+	Ok(Request::get(url.as_str())?
 		.header("User-Agent", UA)
-		.html()
-		.unwrap()
+		.html()?)
 }
 
-pub fn get_json(url: String) -> ObjectRef {
-	let request = Request::new(url.clone(), HttpMethod::Get);
+pub fn get_json(url: String) -> Result<Value> {
+	let request = Request::get(url.as_str())?;
 
 	let request = if url.starts_with(WWW_URL) {
 		request.header("User-Agent", UA)
@@ -53,7 +98,7 @@ pub fn get_json(url: String) -> ObjectRef {
 			.header("webp", "1")
 	};
 
-	request.json().unwrap().as_object().unwrap()
+	request.json_owned::<Value>()
 }
 
 pub fn gen_explore_url(theme: String, top: String, ordering: String, page: i32) -> String {
@@ -111,10 +156,6 @@ pub fn gen_newest_url(page: i32) -> String {
 pub fn gen_manga_url(id: String) -> String {
 	format!("{}/comic/{}", WWW_URL, id)
 }
-
-// pub fn gen_manga_details_url(id: String) -> String {
-// 	format!("{}/comic2/{}", API_URL, id)
-// }
 
 pub fn gen_chapter_list_url(id: String) -> String {
 	format!("{}/comicdetail/{}/chapters", WWW_URL, id)

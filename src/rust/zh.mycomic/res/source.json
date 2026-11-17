@@ -1,10 +1,13 @@
 {
   "info": {
     "id": "zh.mycomic",
-    "lang": "zh",
     "name": "MYCOMIC",
-    "version": 2,
+    "version": 3,
+    "minAppVersion": "0.7",
     "url": "https://mycomic.com/cn",
-    "nsfw": 1
+    "contentRating": 1,
+    "languages": [
+      "zh"
+    ]
   }
 }

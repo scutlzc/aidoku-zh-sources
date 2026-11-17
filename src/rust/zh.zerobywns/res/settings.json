@@ -1,29 +1,35 @@
 [
   {
     "type": "group",
+    "key": "settings",
     "title": "设置",
     "items": [
       {
         "type": "text",
         "key": "url",
+        "title": "URL",
         "placeholder": "URL",
         "default": "http://www.zerobywav.com"
       },
       {
         "type": "text",
         "key": "username",
+        "title": "账号",
         "placeholder": "账号",
         "default": ""
       },
       {
         "type": "text",
         "key": "password",
+        "title": "密码",
         "placeholder": "密码",
+        "secure": true,
         "default": ""
       },
       {
         "type": "text",
         "key": "cookie",
+        "title": "Cookie",
         "placeholder": "Cookie",
         "default": ""
       }

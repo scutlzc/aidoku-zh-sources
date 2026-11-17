@@ -1,15 +1,11 @@
 use aidoku::{
-	error::AidokuError,
+	alloc::{format, string::String, string::ToString, vec::Vec},
 	helpers::uri::{encode_uri, QueryParameters},
-	prelude::*,
-	std::{
-		defaults::defaults_get,
-		net::{HttpMethod, Request},
-		String, ValueRef, Vec,
-	},
+	imports::{defaults::defaults_get, net::Request},
+	Result,
 };
-use alloc::string::ToString;
 use md5::compute;
+use serde_json::Value;
 
 const WWW_URL: &str = "https://www.manhuaren.com";
 const API_URL: &str = "https://mangaapi.manhuaren.com";
@@ -20,12 +16,12 @@ pub fn md5(text: String) -> String {
 	format!("{:x}", compute(text))
 }
 
-pub fn get_json(url: String) -> Result<ValueRef, AidokuError> {
-	let token = defaults_get("token")?.as_string()?.read();
+pub fn get_json(url: String) -> Result<Value> {
+	let token = defaults_get::<String>("token").unwrap_or_default();
 
-	Request::new(url, HttpMethod::Get)
-		.header("Authorization", &format!("YINGQISTS2 {}", token))
-		.json()
+	Request::get(url.as_str())?
+		.header("Authorization", format!("YINGQISTS2 {}", token).as_str())
+		.json_owned::<Value>()
 }
 
 pub fn gen_gsn_hash(mut params: Vec<(String, String)>) -> String {
@@ -46,7 +42,7 @@ pub fn gen_gsn_hash(mut params: Vec<(String, String)>) -> String {
 }
 
 pub fn gen_query_string(mut params: Vec<(String, String)>) -> String {
-	let uid = defaults_get("uid").unwrap().as_string().unwrap().read();
+	let uid = defaults_get::<String>("uid").unwrap_or_default();
 
 	params.push((String::from("gak"), String::from("ios_manhuaren2")));
 	params.push((String::from("gft"), String::from("json")));

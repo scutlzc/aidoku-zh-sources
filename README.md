@@ -2,6 +2,8 @@
 
 Aidoku 中文图源
 
+> 本仓库已迁移至 Aidoku 0.7 的新图源格式（WASM + aidoku-rs `Source` trait），需要 Aidoku 0.7 或更高版本。
+
 ## 如何使用
 
 点击 [这里](https://aidoku.app/add-source-list/?url=https://raw.githubusercontent.com/suiyuran/aidoku-zh-sources/main/public/) 将图源添加到 Aidoku 中。
@@ -19,13 +21,11 @@ Aidoku 中文图源
 - [哔哩漫画](https://www.bilimanga.net)
 - [动漫狂](https://www.cartoonmad.com)
 - [拷贝漫画](https://www.mangacopy.com)
-- ~~[漫画狗](https://dogemanga.com)~~
 - [G站漫画](https://godamh.com)
 - [古风漫画](https://www.gufengmh.com)
 - [Hanime1.me](https://hanime1.me/comics)
 - [嗨皮漫画](https://m.happymh.com)
 - [HO5HO](https://www.ho5ho.com)
-- ~~[ISEKAI](https://isekai.ch)~~
 - [Komiic漫画](https://komiic.com)
 - [哔咔漫画](https://manhuabika.com)
 - [漫画DB](https://www.manhuadb.com)

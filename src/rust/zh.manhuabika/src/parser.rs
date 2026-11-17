@@ -1,98 +1,116 @@
 use aidoku::{
-	prelude::*,
-	std::{ArrayRef, ObjectRef, String, Vec},
-	Chapter, Manga, MangaContentRating, MangaStatus, MangaViewer, Page,
+	alloc::{format, string::String, string::ToString, vec::Vec},
+	Chapter, ContentRating, Manga, MangaStatus, Page, PageContent, Viewer,
 };
-use alloc::string::ToString;
+use serde_json::Value;
 
 use crate::helper;
 
-pub fn has_more(data: ObjectRef) -> bool {
-	let page = data.get("page").as_int().unwrap();
-	let pages = data.get("pages").as_int().unwrap();
+fn jstr(value: &Value, key: &str) -> String {
+	value
+		.get(key)
+		.and_then(|value| value.as_str())
+		.unwrap_or_default()
+		.to_string()
+}
+
+fn jint(value: &Value, key: &str) -> Option<i64> {
+	value.get(key).and_then(|value| {
+		value
+			.as_i64()
+			.or_else(|| value.as_f64().map(|value| value as i64))
+	})
+}
+
+fn jarray(value: &Value, key: &str) -> Vec<Value> {
+	value
+		.get(key)
+		.and_then(|value| value.as_array())
+		.map(|list| list.to_vec())
+		.unwrap_or_default()
+}
+
+pub fn has_more(data: &Value) -> bool {
+	let page = jint(data, "page").unwrap_or_default();
+	let pages = jint(data, "pages").unwrap_or_default();
+
 	pages > page
 }
 
-pub fn parse_manga_list(manga_list: ArrayRef) -> Vec<Manga> {
-	manga_list
-		.map(|manga| parse_manga(manga.as_object().unwrap()))
-		.collect::<Vec<Manga>>()
+pub fn parse_manga_list(list: &[Value]) -> Vec<Manga> {
+	list.iter().map(parse_manga).collect()
 }
 
-pub fn parse_manga(manga: ObjectRef) -> Manga {
-	let manga = match manga.get("comic").as_object() {
-		Ok(value) => value,
-		Err(_) => manga,
-	};
-	let id = manga.get("_id").as_string().unwrap().read();
-	let thumb = manga.get("thumb").as_object().unwrap();
-	let host = thumb.get("fileServer").as_string().unwrap().read();
-	let path = thumb.get("path").as_string().unwrap().read();
+pub fn parse_manga(manga: &Value) -> Manga {
+	let manga = manga.get("comic").unwrap_or(manga);
+	let key = jstr(manga, "_id");
+	let thumb = manga.get("thumb").unwrap_or(&Value::Null);
+	let host = jstr(thumb, "fileServer");
+	let path = jstr(thumb, "path");
 	let cover = format!("{}/static/{}", host, path);
-	let title = manga.get("title").as_string().unwrap().read();
-	let author = manga
-		.get("author")
-		.as_string()
-		.unwrap()
-		.read()
-		.split("&")
-		.map(|a| a.trim().to_string())
-		.collect::<Vec<String>>()
-		.join(", ");
-	let artist = String::new();
-	let description = manga
-		.get("description")
-		.as_string()
-		.unwrap_or_default()
-		.read();
-	let url = helper::gen_manga_url(id.clone());
-	let categories = manga
-		.get("categories")
-		.as_array()
-		.unwrap()
-		.map(|category| category.as_string().unwrap().read())
+	let title = jstr(manga, "title");
+	let authors: Vec<String> = jstr(manga, "author")
+		.split('&')
+		.map(|author| author.trim().to_string())
 		.collect::<Vec<String>>();
-	let status = if manga.get("finished").as_bool().unwrap_or_default() {
+	let description = jstr(manga, "description");
+	let url = helper::gen_manga_url(key.clone());
+	let tags: Vec<String> = jarray(manga, "categories")
+		.iter()
+		.map(|category| category.as_str().unwrap_or_default().to_string())
+		.collect::<Vec<String>>();
+	let status = if manga
+		.get("finished")
+		.and_then(|finished| finished.as_bool())
+		.unwrap_or_default()
+	{
 		MangaStatus::Completed
 	} else {
 		MangaStatus::Ongoing
 	};
-	let nsfw = MangaContentRating::Nsfw;
-	let viewer = if categories.contains(&String::from("WEBTOON")) {
-		MangaViewer::Scroll
+	let viewer = if tags.contains(&String::from("WEBTOON")) {
+		Viewer::Webtoon
 	} else {
-		MangaViewer::Rtl
+		Viewer::RightToLeft
 	};
+
 	Manga {
-		id,
-		cover,
+		key,
+		cover: if cover.is_empty() { None } else { Some(cover) },
 		title,
-		author,
-		artist,
-		description,
-		url,
-		categories,
+		authors: if authors.is_empty() {
+			None
+		} else {
+			Some(authors)
+		},
+		description: if description.is_empty() {
+			None
+		} else {
+			Some(description)
+		},
+		url: Some(url),
+		tags: if tags.is_empty() { None } else { Some(tags) },
 		status,
-		nsfw,
+		content_rating: ContentRating::NSFW,
 		viewer,
+		..Default::default()
 	}
 }
 
-pub fn parse_chapter_list(manga_id: String, chapter_list: ArrayRef) -> Vec<Chapter> {
+pub fn parse_chapter_list(manga_id: String, list: &[Value]) -> Vec<Chapter> {
 	let mut chapters: Vec<Chapter> = Vec::new();
 
-	for item in chapter_list {
-		let item = item.as_object().unwrap();
-		let order = item.get("order").as_int().unwrap();
-		let id = order.to_string();
-		let title = item.get("title").as_string().unwrap().read();
+	for item in list.iter() {
+		let order = jint(item, "order").unwrap_or_default();
+		let key = order.to_string();
+		let title = jstr(item, "title");
 		let chapter = order as f32;
-		let url = helper::gen_chapter_url(manga_id.clone(), id.clone());
+		let url = helper::gen_chapter_url(manga_id.clone(), key.clone());
 		chapters.push(Chapter {
-			id,
-			title,
-			chapter,
-			url,
+			key,
+			title: Some(title),
+			chapter_number: Some(chapter),
+			url: Some(url),
 			..Default::default()
 		});
 	}
@@ -100,19 +118,16 @@ pub fn parse_chapter_list(manga_id: String, chapter_list: ArrayRef) -> Vec<Chapt
 	chapters
 }
 
-pub fn parse_page_list(page_list: ArrayRef, offset: i32) -> Vec<Page> {
+pub fn parse_page_list(list: &[Value]) -> Vec<Page> {
 	let mut pages: Vec<Page> = Vec::new();
 
-	for (index, item) in page_list.enumerate() {
-		let item = item.as_object().unwrap();
-		let index = index as i32 + offset;
-		let media = item.get("media").as_object().unwrap();
-		let host = media.get("fileServer").as_string().unwrap().read();
-		let path = media.get("path").as_string().unwrap().read();
+	for item in list.iter() {
+		let media = item.get("media").unwrap_or(&Value::Null);
+		let host = jstr(media, "fileServer");
+		let path = jstr(media, "path");
 		let url = format!("{}/static/{}", host, path);
 		pages.push(Page {
-			index,
-			url,
+			content: PageContent::url(url),
 			..Default::default()
 		});
 	}

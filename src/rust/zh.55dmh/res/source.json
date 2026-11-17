@@ -1,16 +1,19 @@
 {
   "info": {
     "id": "zh.55dmh",
-    "lang": "zh",
     "name": "无敌漫画",
-    "version": 2,
+    "version": 3,
+    "minAppVersion": "0.7",
     "url": "https://www.55dmh.com",
-    "nsfw": 0
+    "contentRating": 0,
+    "languages": [
+      "zh"
+    ]
   },
   "listings": [
     {
+      "id": "recent",
       "name": "最近更新"
     }
-  ],
-  "deprecated": true
+  ]
 }

@@ -1,47 +1,60 @@
 use aidoku::{
-	std::{ArrayRef, ObjectRef, String, Vec},
-	Manga, MangaContentRating, MangaStatus, MangaViewer,
+	alloc::{string::ToString, vec, String, Vec},
+	ContentRating, Manga, MangaStatus, Viewer,
 };
-use alloc::string::ToString;
+use serde_json::Value;
 
-use crate::helper;
-
-pub fn parse_manga_list(manga_list: ArrayRef) -> Vec<Manga> {
-	manga_list
-		.map(|manga| parse_manga(manga.as_object().unwrap()))
-		.collect::<Vec<Manga>>()
+pub fn parse_manga_list(manga_list: &[Value]) -> Vec<Manga> {
+	manga_list.iter().map(parse_manga).collect::<Vec<Manga>>()
 }
 
-pub fn parse_manga(manga: ObjectRef) -> Manga {
-	let id = manga.get("Bid").as_int().unwrap().to_string();
-	let cover = helper::gen_cover_url(id.clone());
-	let title = manga.get("Bookname").as_string().unwrap().read();
-	let author = manga.get("Author").as_string().unwrap().read();
-	let artist = String::new();
+pub fn parse_manga(manga: &Value) -> Manga {
+	let id = manga
+		.get("Bid")
+		.and_then(Value::as_i64)
+		.map(|value| value.to_string())
+		.or_else(|| {
+			manga
+				.get("Bid")
+				.and_then(Value::as_str)
+				.map(ToString::to_string)
+		})
+		.unwrap_or_default();
+	let cover = crate::helper::gen_cover_url(id.as_str());
+	let title = manga
+		.get("Bookname")
+		.and_then(Value::as_str)
+		.unwrap_or_default()
+		.to_string();
+	let author = manga
+		.get("Author")
+		.and_then(Value::as_str)
+		.unwrap_or_default()
+		.to_string();
 	let description = String::new();
-	let url = helper::gen_manga_url(id.clone());
+	let url = crate::helper::gen_manga_url(id.as_str());
 	let categories = manga
 		.get("Ptag")
-		.as_string()
-		.unwrap()
-		.read()
-		.split(" ")
-		.map(|category| category.to_string())
+		.and_then(Value::as_str)
+		.unwrap_or_default()
+		.split(' ')
+		.map(ToString::to_string)
 		.collect::<Vec<String>>();
 	let status = MangaStatus::Completed;
-	let nsfw = MangaContentRating::Nsfw;
-	let viewer = MangaViewer::Rtl;
+	let content_rating = ContentRating::NSFW;
+	let viewer = Viewer::RightToLeft;
+
 	Manga {
-		id,
-		cover,
+		key: id,
 		title,
-		author,
-		artist,
-		description,
-		url,
-		categories,
+		cover: Some(cover),
+		authors: Some(vec![author]),
+		description: Some(description),
+		url: Some(url),
+		tags: Some(categories),
 		status,
-		nsfw,
+		content_rating,
 		viewer,
+		..Default::default()
 	}
 }

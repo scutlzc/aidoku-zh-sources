@@ -1,21 +1,16 @@
 {
   "info": {
     "id": "zh.18mh",
-    "lang": "zh",
     "name": "18漫画",
-    "version": 1,
+    "version": 2,
+    "minAppVersion": "0.7",
     "url": "https://18mh.org",
-    "nsfw": 2
+    "contentRating": 2,
+    "languages": ["zh"]
   },
   "listings": [
-    {
-      "name": "人气推荐"
-    },
-    {
-      "name": "热门更新"
-    },
-    {
-      "name": "最新上架"
-    }
+    { "id": "hots", "name": "人气推荐" },
+    { "id": "dayup", "name": "热门更新" },
+    { "id": "newss", "name": "最新上架" }
   ]
 }

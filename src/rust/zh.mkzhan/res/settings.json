@@ -1,20 +1,11 @@
 [
   {
     "type": "group",
+    "key": "settings",
     "title": "设置",
     "items": [
-      {
-        "type": "text",
-        "key": "uid",
-        "placeholder": "uid",
-        "default": "77836140"
-      },
-      {
-        "type": "text",
-        "key": "sign",
-        "placeholder": "sign",
-        "default": "8aa5c8dc2a9b1e831ab159a2166fb6f4"
-      }
+      { "type": "text", "key": "uid", "title": "uid", "placeholder": "uid", "default": "77836140" },
+      { "type": "text", "key": "sign", "title": "sign", "placeholder": "sign", "default": "8aa5c8dc2a9b1e831ab159a2166fb6f4" }
     ]
   }
 ]

@@ -1,169 +1,192 @@
-use core::str::FromStr;
-
 use aidoku::{
-	prelude::*,
-	std::{ArrayRef, ObjectRef, String, Vec},
-	Chapter, Manga, MangaContentRating, MangaStatus, MangaViewer, Page,
+	alloc::{format, string::String, string::ToString, vec::Vec},
+	Chapter, ContentRating, Manga, MangaStatus, Page, PageContent, Viewer,
 };
-use alloc::string::ToString;
+use serde_json::Value;
 
 use crate::helper;
-use uuid::Uuid;
 
-pub fn has_more(data: ObjectRef) -> bool {
-	let total = data.get("total").as_int().unwrap();
-	let limit = data.get("limit").as_int().unwrap();
-	let offset = data.get("offset").as_int().unwrap();
+fn jstr(value: &Value, key: &str) -> String {
+	value
+		.get(key)
+		.and_then(|value| value.as_str())
+		.unwrap_or_default()
+		.to_string()
+}
+
+fn jint(value: &Value, key: &str) -> Option<i64> {
+	value.get(key).and_then(|value| {
+		value
+			.as_i64()
+			.or_else(|| value.as_f64().map(|value| value as i64))
+	})
+}
+
+fn hex_nibble(byte: u8) -> Option<u64> {
+	match byte {
+		b'0'..=b'9' => Some((byte - b'0') as u64),
+		b'a'..=b'f' => Some((byte - b'a' + 10) as u64),
+		b'A'..=b'F' => Some((byte - b'A' + 10) as u64),
+		_ => None,
+	}
+}
+
+fn hex_u64(text: &str) -> Option<u64> {
+	if text.is_empty() {
+		return None;
+	}
+
+	let mut value: u64 = 0;
+
+	for byte in text.as_bytes() {
+		value = value.checked_mul(16)? + hex_nibble(*byte)?;
+	}
+
+	Some(value)
+}
+
+// Unix seconds from a UUID v1 timestamp (100ns ticks since 1582-10-15).
+fn uuid_v1_unix(id: &str) -> Option<i64> {
+	let mut parts = id.split('-');
+	let time_low = hex_u64(parts.next()?)?;
+	let time_mid = hex_u64(parts.next()?)?;
+	let time_hi = hex_u64(parts.next()?)? & 0x0fff;
+	let ticks = (time_hi << 48) | (time_mid << 32) | time_low;
+	let unix_ticks = ticks.checked_sub(122_192_928_000_000_000)?;
+
+	Some((unix_ticks / 10_000_000) as i64)
+}
+
+pub fn has_more(data: &Value) -> bool {
+	let total = jint(data, "total").unwrap_or_default();
+	let limit = jint(data, "limit").unwrap_or_default();
+	let offset = jint(data, "offset").unwrap_or_default();
+
 	total > limit + offset
 }
 
-pub fn parse_manga_list(manga_list: ArrayRef) -> Vec<Manga> {
-	manga_list
-		.map(|manga| parse_manga(manga.as_object().unwrap()))
-		.collect::<Vec<Manga>>()
+pub fn parse_manga_list(list: Option<&Value>) -> Vec<Manga> {
+	match list.and_then(|list| list.as_array()) {
+		Some(list) => list.iter().map(parse_manga).collect(),
+		None => Vec::new(),
+	}
 }
 
-pub fn parse_manga(manga: ObjectRef) -> Manga {
-	let manga = match manga.get("comic").as_object() {
-		Ok(value) => value,
-		Err(_) => manga,
-	};
-	let id = manga.get("path_word").as_string().unwrap().read();
-	let cover = manga.get("cover").as_string().unwrap().read();
-	let title = manga.get("name").as_string().unwrap().read();
-	let author = manga
+pub fn parse_manga(manga: &Value) -> Manga {
+	let manga = manga.get("comic").unwrap_or(manga);
+	let key = jstr(manga, "path_word");
+	let cover = jstr(manga, "cover");
+	let title = jstr(manga, "name");
+	let authors: Vec<String> = manga
 		.get("author")
-		.as_array()
-		.unwrap()
-		.map(|author| {
-			author
-				.as_object()
-				.unwrap()
-				.get("name")
-				.as_string()
-				.unwrap()
-				.read()
+		.and_then(|authors| authors.as_array())
+		.map(|authors| {
+			authors
+				.iter()
+				.filter_map(|author| {
+					author
+						.get("name")
+						.and_then(|name| name.as_str())
+						.map(|name| name.to_string())
+				})
+				.collect::<Vec<String>>()
 		})
-		.collect::<Vec<String>>()
-		.join(", ");
-	let artist = String::new();
-	let description = manga
-		.get("brief")
-		.as_string()
-		.unwrap_or_default()
-		.read()
-		.trim()
-		.to_string();
-	let url = helper::gen_manga_url(id.clone());
-	let categories = manga
+		.unwrap_or_default();
+	let description = jstr(manga, "brief").trim().to_string();
+	let url = helper::gen_manga_url(key.clone());
+	let tags: Vec<String> = manga
 		.get("theme")
-		.as_array()
-		.unwrap_or_default()
-		.map(|theme| {
-			theme
-				.as_object()
-				.unwrap_or_default()
-				.get("name")
-				.as_string()
-				.unwrap_or_default()
-				.read()
+		.and_then(|themes| themes.as_array())
+		.map(|themes| {
+			themes
+				.iter()
+				.filter_map(|theme| {
+					theme
+						.get("name")
+						.and_then(|name| name.as_str())
+						.map(|name| name.to_string())
+				})
+				.collect::<Vec<String>>()
 		})
-		.collect::<Vec<String>>();
-	let status = match manga
-		.get("status")
-		.as_object()
-		.unwrap_or_default()
-		.get("value")
-		.as_int()
-		.unwrap_or(-1)
-	{
+		.unwrap_or_default();
+	let status = match jint(manga.get("status").unwrap_or(&Value::Null), "value").unwrap_or(-1) {
 		0 => MangaStatus::Ongoing,
 		1 => MangaStatus::Completed,
-		2 => MangaStatus::Unknown,
 		_ => MangaStatus::Unknown,
 	};
-	let nsfw = match manga
-		.get("restrict")
-		.as_object()
-		.unwrap_or_default()
-		.get("value")
-		.as_int()
-		.unwrap_or(-1)
-	{
-		0 => MangaContentRating::Safe,
-		1 => MangaContentRating::Suggestive,
-		2 => MangaContentRating::Nsfw,
-		3 => MangaContentRating::Nsfw,
-		4 => MangaContentRating::Nsfw,
-		_ => MangaContentRating::Safe,
-	};
-	let viewer = MangaViewer::Rtl;
+	let content_rating =
+		match jint(manga.get("restrict").unwrap_or(&Value::Null), "value").unwrap_or(-1) {
+			0 => ContentRating::Safe,
+			1 => ContentRating::Suggestive,
+			2 => ContentRating::NSFW,
+			3 => ContentRating::NSFW,
+			4 => ContentRating::NSFW,
+			_ => ContentRating::Safe,
+		};
+
 	Manga {
-		id,
-		cover,
+		key,
+		cover: if cover.is_empty() { None } else { Some(cover) },
 		title,
-		author,
-		artist,
-		description,
-		url,
-		categories,
+		authors: if authors.is_empty() {
+			None
+		} else {
+			Some(authors)
+		},
+		description: if description.is_empty() {
+			None
+		} else {
+			Some(description)
+		},
+		url: Some(url),
+		tags: if tags.is_empty() { None } else { Some(tags) },
 		status,
-		nsfw,
-		viewer,
+		content_rating,
+		viewer: Viewer::RightToLeft,
+		..Default::default()
 	}
 }
 
 pub fn parse_chapter_group(
 	manga_id: String,
-	group: ObjectRef,
+	group: &Value,
 	name: String,
 	start: usize,
 ) -> Vec<Chapter> {
-	let list = group.get("chapters").as_array();
+	let list = match group.get("chapters").and_then(|list| list.as_array()) {
+		Some(list) => list,
+		None => return Vec::new(),
+	};
 	let mut chapters: Vec<Chapter> = Vec::new();
 
-	if list.is_ok() {
-		for (index, item) in list.unwrap().enumerate() {
-			let chapter = item.as_object().unwrap();
-			let id = chapter.get("id").as_string().unwrap().read();
-			let title = format!(
-				"{} - {}",
-				name,
-				chapter.get("name").as_string().unwrap().read()
-			);
-			let chapter = (index + start + 1) as f32;
-			let (p1, p2) = Uuid::from_str(&id.clone())
-				.unwrap()
-				.get_timestamp()
-				.unwrap()
-				.to_unix();
-			let date_updated = (p1 as f64) + (p2 as f64 * 10e-10);
-			let url = helper::gen_chapter_url(manga_id.clone(), id.clone());
-			chapters.push(Chapter {
-				id,
-				title,
-				chapter,
-				date_updated,
-				url,
-				..Default::default()
-			})
-		}
+	for (index, item) in list.iter().enumerate() {
+		let id = jstr(item, "id");
+		let title = format!("{} - {}", name, jstr(item, "name"));
+		let chapter = (index + start + 1) as f32;
+		let date_uploaded = uuid_v1_unix(&id);
+		let url = helper::gen_chapter_url(manga_id.clone(), id.clone());
+		chapters.push(Chapter {
+			key: id,
+			title: Some(title),
+			chapter_number: Some(chapter),
+			date_uploaded,
+			url: Some(url),
+			..Default::default()
+		});
 	}
 
 	chapters
 }
 
-pub fn parse_chapter_list(manga: ObjectRef) -> Vec<Chapter> {
-	let build = manga.get("build").as_object().unwrap();
-	let manga_id = build.get("path_word").as_string().unwrap().read();
-	let groups = manga.get("groups").as_object().unwrap();
-	let default_group = groups.get("default").as_object().unwrap_or_default();
-	let tankobon_group = groups.get("tankobon").as_object().unwrap_or_default();
-	let other_honyakuchimu_group = groups
-		.get("other_honyakuchimu")
-		.as_object()
-		.unwrap_or_default();
-	let karapeji_group = groups.get("karapeji").as_object().unwrap_or_default();
+pub fn parse_chapter_list(manga: &Value) -> Vec<Chapter> {
+	let empty = Value::Null;
+	let build = manga.get("build").unwrap_or(&empty);
+	let manga_id = jstr(build, "path_word");
+	let groups = manga.get("groups").unwrap_or(&empty);
+	let default_group = groups.get("default").unwrap_or(&empty);
+	let tankobon_group = groups.get("tankobon").unwrap_or(&empty);
+	let other_honyakuchimu_group = groups.get("other_honyakuchimu").unwrap_or(&empty);
+	let karapeji_group = groups.get("karapeji").unwrap_or(&empty);
 	let default = parse_chapter_group(manga_id.clone(), default_group, String::from("默认"), 0);
 	let tankobon = parse_chapter_group(
 		manga_id.clone(),
@@ -189,19 +212,20 @@ pub fn parse_chapter_list(manga: ObjectRef) -> Vec<Chapter> {
 	chapters
 }
 
-pub fn parse_page_list(chapters: ArrayRef) -> Vec<Page> {
-	let mut pages: Vec<Page> = Vec::new();
+pub fn parse_page_list(pages: &Value) -> Vec<Page> {
+	let list = match pages.as_array() {
+		Some(list) => list,
+		None => return Vec::new(),
+	};
+	let mut result: Vec<Page> = Vec::new();
 
-	for (index, item) in chapters.enumerate() {
-		let page = item.as_object().unwrap();
-		let index = index as i32;
-		let url = page.get("url").as_string().unwrap().read();
-		pages.push(Page {
-			index,
-			url,
+	for item in list.iter() {
+		let url = jstr(item, "url");
+		result.push(Page {
+			content: PageContent::url(url),
 			..Default::default()
-		})
+		});
 	}
 
-	pages
+	result
 }

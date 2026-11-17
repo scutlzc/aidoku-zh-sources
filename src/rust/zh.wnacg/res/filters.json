@@ -1,15 +1,16 @@
 [
   {
-    "type": "title"
+    "type": "select",
+    "id": "category",
+    "title": "类别",
+    "options": ["全部", "同人志", "单行本", "杂志&短篇"],
+    "ids": ["", "5", "6", "7"]
   },
   {
     "type": "select",
-    "name": "类别",
-    "options": ["全部", "同人志", "单行本", "杂志&短篇"]
-  },
-  {
-    "type": "select",
-    "name": "语言",
-    "options": ["全部", "汉化", "日语", "English"]
+    "id": "language",
+    "title": "语言",
+    "options": ["全部", "汉化", "日语", "English"],
+    "ids": ["", "zh", "ja", "en"]
   }
 ]

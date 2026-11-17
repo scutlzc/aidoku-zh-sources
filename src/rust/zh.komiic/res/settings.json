@@ -1,11 +1,13 @@
 [
   {
     "type": "group",
+    "key": "cookie-group",
     "title": "Cookie",
     "items": [
       {
         "type": "text",
         "key": "cookie",
+        "title": "Cookie",
         "placeholder": "Cookie (可选，用于提高每日阅读限额)",
         "default": ""
       }

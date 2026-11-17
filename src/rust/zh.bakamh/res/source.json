@@ -1,14 +1,18 @@
 {
   "info": {
     "id": "zh.bakamh",
-    "lang": "zh",
     "name": "巴卡漫画",
-    "version": 2,
+    "version": 3,
+    "minAppVersion": "0.7",
     "url": "https://bakamh.com",
-    "nsfw": 2
+    "contentRating": 2,
+    "languages": [
+      "zh"
+    ]
   },
   "listings": [
     {
+      "id": "new",
       "name": "新作"
     }
   ]

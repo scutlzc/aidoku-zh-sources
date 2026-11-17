@@ -1,24 +1,17 @@
 {
   "info": {
     "id": "zh.wnacg",
-    "lang": "zh",
     "name": "绅士漫画",
-    "version": 4,
+    "version": 5,
+    "minAppVersion": "0.7",
     "url": "https://www.wnacg01.cc",
-    "nsfw": 2
+    "contentRating": 2,
+    "languages": ["zh"]
   },
   "listings": [
-    {
-      "name": "CG画集"
-    },
-    {
-      "name": "3D漫画"
-    },
-    {
-      "name": "Cosplay"
-    },
-    {
-      "name": "韩漫"
-    }
+    { "id": "cg", "name": "CG画集" },
+    { "id": "3d", "name": "3D漫画" },
+    { "id": "cosplay", "name": "Cosplay" },
+    { "id": "hanman", "name": "韩漫" }
   ]
 }

@@ -1,327 +1,300 @@
 #![no_std]
-extern crate alloc;
 
 use aidoku::{
-	error::Result,
-	helpers::{substring::Substring, uri::encode_uri},
+	alloc::vec,
+	alloc::{string::ToString, String, Vec},
+	helpers::uri::encode_uri,
+	imports::{html::Document, net::Request},
 	prelude::*,
-	std::{
-		json,
-		net::{HttpMethod, Request},
-		String, Vec,
-	},
-	Chapter, Filter, FilterType, Listing, Manga, MangaContentRating, MangaPageResult, MangaStatus,
-	MangaViewer, Page,
+	Chapter, ContentRating, FilterValue, Listing, ListingProvider, Manga, MangaPageResult,
+	MangaStatus, Page, PageContent, Result, Source, Viewer,
 };
-use alloc::string::ToString;
+use serde_json::Value;
 
 const WWW_URL: &str = "https://www.gufengmh.com";
 const IMG_URL: &str = "https://res1.xiaoqinre.com";
 
-const FILTER_GENRE: [&str; 5] = ["", "shaonian", "shaonv", "qingnian", "zhenrenmanhua"];
-const FILTER_REGION: [&str; 6] = [
-	"",
-	"ribenmanhua",
-	"guochanmanhua",
-	"gangtaimanhua",
-	"oumeimanhua",
-	"hanguomanhua",
-];
-const FILTER_STATUS: [&str; 3] = ["", "wanjie", "lianzai"];
 const FILTER_SORT: [&str; 3] = ["post", "update", "click"];
 
-#[get_manga_list]
-fn get_manga_list(filters: Vec<Filter>, page: i32) -> Result<MangaPageResult> {
-	let mut query = String::new();
-	let mut genre = String::new();
-	let mut region = String::new();
-	let mut status = String::new();
-	let mut sort = String::from("click");
+struct GuFengMh;
 
-	for filter in filters {
-		match filter.kind {
-			FilterType::Title => {
-				query = filter.value.as_string()?.read();
+impl GuFengMh {
+	fn parse_manga_list(url: String, selector: &str) -> Result<Vec<Manga>> {
+		let html = Request::get(url)?.html()?;
+		let mut entries: Vec<Manga> = Vec::new();
+
+		let Some(items) = html.select(selector) else {
+			return Ok(entries);
+		};
+
+		for item in items {
+			let href = item
+				.select_first(".cover")
+				.and_then(|a| a.attr("href"))
+				.unwrap_or_default();
+			let key = href
+				.split('/')
+				.filter(|part| !part.is_empty())
+				.map(|part| part.to_string())
+				.collect::<Vec<String>>()
+				.pop()
+				.unwrap_or_default();
+			if key.is_empty() {
+				continue;
 			}
-			FilterType::Select => {
-				let index = filter.value.as_int()? as usize;
-				match filter.name.as_str() {
-					"类型" => {
-						genre = FILTER_GENRE[index].to_string();
-					}
-					"地区" => {
-						region = FILTER_REGION[index].to_string();
-					}
-					"进度" => {
-						status = FILTER_STATUS[index].to_string();
-					}
-					_ => continue,
+			let cover = item
+				.select_first(".cover>img")
+				.and_then(|img| img.attr("src"))
+				.unwrap_or_default();
+			let title = item
+				.select_first(".ell>a")
+				.and_then(|title| title.text())
+				.unwrap_or_default()
+				.trim()
+				.to_string();
+			entries.push(Manga {
+				key,
+				title,
+				cover: Some(cover),
+				..Default::default()
+			});
+		}
+
+		Ok(entries)
+	}
+
+	fn parse_chapter_list(html: &Document, manga_id: &str) -> Result<Vec<Chapter>> {
+		let mut chapters: Vec<Chapter> = Vec::new();
+
+		if let Some(items) = html.select("#chapter-list-1>li>a") {
+			for (index, item) in items.enumerate() {
+				let href = item.attr("href").unwrap_or_default();
+				let key = href
+					.split('/')
+					.map(|part| part.to_string())
+					.collect::<Vec<String>>()
+					.pop()
+					.unwrap_or_default()
+					.replace(".html", "");
+				if key.is_empty() {
+					continue;
 				}
+				let title = item
+					.select_first("span")
+					.and_then(|title| title.text())
+					.unwrap_or_default();
+				chapters.push(Chapter {
+					key: key.clone(),
+					title: Some(title),
+					chapter_number: Some((index + 1) as f32),
+					url: Some(format!("{WWW_URL}/manhua/{manga_id}/{key}.html")),
+					..Default::default()
+				});
 			}
-			FilterType::Sort => {
-				let value = match filter.value.as_object() {
-					Ok(value) => value,
-					Err(_) => continue,
-				};
-				let index = value.get("index").as_int()? as usize;
-				let ascending = value.get("ascending").as_bool().unwrap_or(false);
-				sort = FILTER_SORT[index].to_string();
-				if ascending {
-					sort = format!("-{}", sort)
+		}
+		chapters.reverse();
+
+		Ok(chapters)
+	}
+}
+
+fn substring_after<'a>(value: &'a str, pattern: &str) -> Option<&'a str> {
+	value
+		.find(pattern)
+		.map(|index| &value[index + pattern.len()..])
+}
+
+fn substring_before<'a>(value: &'a str, pattern: &str) -> Option<&'a str> {
+	value.find(pattern).map(|index| &value[..index])
+}
+
+impl Source for GuFengMh {
+	fn new() -> Self {
+		Self
+	}
+
+	fn get_search_manga_list(
+		&self,
+		query: Option<String>,
+		page: i32,
+		filters: Vec<FilterValue>,
+	) -> Result<MangaPageResult> {
+		let mut genre = String::new();
+		let mut region = String::new();
+		let mut status = String::new();
+		let mut sort = String::from("click");
+
+		for filter in filters {
+			match filter {
+				FilterValue::Select { id, value } => {
+					if id == "genre" {
+						genre = value;
+					} else if id == "region" {
+						region = value;
+					} else if id == "status" {
+						status = value;
+					}
 				}
+				FilterValue::Sort {
+					index, ascending, ..
+				} => {
+					sort = FILTER_SORT
+						.get(index as usize)
+						.copied()
+						.unwrap_or_default()
+						.to_string();
+					if ascending {
+						sort = format!("-{sort}");
+					}
+				}
+				_ => continue,
 			}
-			_ => continue,
 		}
-	}
 
-	let url = if query.is_empty() {
-		format!(
-			"{}/list/{}-{}-{}/{}/{}/",
-			WWW_URL, genre, region, status, sort, page
-		)
-	} else {
-		format!(
-			"{}/search/?keywords={}&page={}",
-			WWW_URL,
-			encode_uri(query.clone()),
-			page
-		)
-	};
-	let html = Request::new(url, HttpMethod::Get).html()?;
-	let has_more = true;
-	let mut mangas: Vec<Manga> = Vec::new();
-
-	for item in html.select(".book-list>li").array() {
-		let item = match item.as_node() {
-			Ok(node) => node,
-			Err(_) => continue,
+		let query = query.unwrap_or_default();
+		let url = if query.is_empty() {
+			format!("{WWW_URL}/list/{genre}-{region}-{status}/{sort}/{page}/")
+		} else {
+			format!(
+				"{WWW_URL}/search/?keywords={}&page={page}",
+				encode_uri(query)
+			)
 		};
-		let id = item
-			.select(".cover")
-			.attr("href")
-			.read()
-			.split("/")
-			.filter(|a| !a.is_empty())
-			.map(|a| a.to_string())
-			.collect::<Vec<String>>()
-			.pop()
-			.unwrap();
-		let cover = item.select(".cover>img").attr("src").read();
-		let title = item.select(".ell>a").text().read().trim().to_string();
-		mangas.push(Manga {
-			id,
-			cover,
-			title,
-			..Default::default()
-		});
-	}
 
-	Ok(MangaPageResult {
-		manga: mangas,
-		has_more,
-	})
-}
-
-#[get_manga_listing]
-fn get_manga_listing(listing: Listing, page: i32) -> Result<MangaPageResult> {
-	let mut name = String::new();
-
-	match listing.name.as_str() {
-		"总人气榜" => {
-			name.push_str("popularity");
-		}
-		"日人气榜" => {
-			name.push_str("popularity-daily");
-		}
-		"周人气榜" => {
-			name.push_str("popularity-weekly");
-		}
-		"月人气榜" => {
-			name.push_str("popularity-monthly");
-		}
-		"总点击榜" => {
-			name.push_str("click");
-		}
-		"日点击榜" => {
-			name.push_str("click-daily");
-		}
-		"周点击榜" => {
-			name.push_str("click-weekly");
-		}
-		"月点击榜" => {
-			name.push_str("click-monthly");
-		}
-		"总订阅榜" => {
-			name.push_str("subscribe");
-		}
-		_ => return get_manga_list(Vec::new(), page),
-	}
-
-	let url = format!("{}/rank/{}/", WWW_URL, name);
-	let html = Request::new(url, HttpMethod::Get).html()?;
-	let has_more = false;
-	let mut mangas: Vec<Manga> = Vec::new();
-
-	for item in html.select(".rank-list>li").array() {
-		let item = match item.as_node() {
-			Ok(node) => node,
-			Err(_) => continue,
-		};
-		let id = item
-			.select(".cover")
-			.attr("href")
-			.read()
-			.split("/")
-			.filter(|a| !a.is_empty())
-			.map(|a| a.to_string())
-			.collect::<Vec<String>>()
-			.pop()
-			.unwrap();
-		let cover = item.select(".cover>img").attr("src").read();
-		let title = item.select(".ell>a").text().read().trim().to_string();
-		mangas.push(Manga {
-			id,
-			cover,
-			title,
-			..Default::default()
-		});
-	}
-
-	Ok(MangaPageResult {
-		manga: mangas,
-		has_more,
-	})
-}
-
-#[get_manga_details]
-fn get_manga_details(id: String) -> Result<Manga> {
-	let url = format!("{}/manhua/{}/", WWW_URL, id.clone());
-	let html = Request::new(url.clone(), HttpMethod::Get).html()?;
-	let cover = html.select(".book-cover>.cover>img").attr("src").read();
-	let title = html.select(".book-title>h1>span").text().read();
-	let author = html.select("a[href*='author']").text().read();
-	let artist = String::new();
-	let description = html
-		.select("#intro-cut>p")
-		.text()
-		.read()
-		.replace("漫画简介：", "")
-		.replace("介绍:", "")
-		.trim()
-		.to_string();
-	let categories = html
-		.select(".detail-list>li:nth-child(2)>span:nth-child(1)>a")
-		.array()
-		.map(|a| a.as_node().unwrap().text().read().trim().to_string())
-		.filter(|a| !a.is_empty())
-		.collect::<Vec<String>>();
-	let status = match html
-		.select(".detail-list>li:nth-child(1)>span:nth-child(1)>a")
-		.text()
-		.read()
-		.as_str()
-	{
-		"已完结" => MangaStatus::Completed,
-		"连载中" => MangaStatus::Ongoing,
-		_ => MangaStatus::Unknown,
-	};
-	let nsfw = MangaContentRating::Safe;
-	let viewer = MangaViewer::Scroll;
-
-	Ok(Manga {
-		id,
-		cover,
-		title,
-		author,
-		artist,
-		description,
-		url,
-		categories,
-		status,
-		nsfw,
-		viewer,
-	})
-}
-
-#[get_chapter_list]
-fn get_chapter_list(id: String) -> Result<Vec<Chapter>> {
-	let url = format!("{}/manhua/{}/", WWW_URL, id.clone());
-	let html = Request::new(url.clone(), HttpMethod::Get).html()?;
-	let list = html.select("#chapter-list-1>li>a").array();
-	let mut chapters: Vec<Chapter> = Vec::new();
-
-	for (index, item) in list.enumerate() {
-		let item = match item.as_node() {
-			Ok(item) => item,
-			Err(_) => continue,
-		};
-		let chapter_id = item
-			.attr("href")
-			.read()
-			.split("/")
-			.map(|a| a.to_string())
-			.collect::<Vec<String>>()
-			.pop()
-			.unwrap()
-			.replace(".html", "");
-		let title = item.select("span").text().read();
-		let chapter = (index + 1) as f32;
-		let url = format!(
-			"{}/manhua/{}/{}.html",
-			WWW_URL,
-			id.clone(),
-			chapter_id.clone()
-		);
-		chapters.push(Chapter {
-			id: chapter_id,
-			title,
-			chapter,
-			url,
-			..Default::default()
-		});
-	}
-	chapters.reverse();
-
-	Ok(chapters)
-}
-
-#[get_page_list]
-fn get_page_list(manga_id: String, chapter_id: String) -> Result<Vec<Page>> {
-	let url = format!(
-		"{}/manhua/{}/{}.html",
-		WWW_URL,
-		manga_id.clone(),
-		chapter_id.clone()
-	);
-	let html = Request::new(url.clone(), HttpMethod::Get).html()?;
-	let text = html.html().read();
-	let list = text
-		.substring_after("var chapterImages = ")
-		.unwrap()
-		.substring_before(";")
-		.unwrap();
-	let path = text
-		.substring_after("var chapterPath = ")
-		.unwrap()
-		.substring_before(";")
-		.unwrap()
-		.replace("\"", "");
-	let list = json::parse(list).unwrap().as_array()?;
-	let mut pages: Vec<Page> = Vec::new();
-
-	for (index, item) in list.enumerate() {
-		let item = match item.as_string() {
-			Ok(node) => node,
-			Err(_) => continue,
-		};
-		let index = index as i32;
-		let url = format!("{}/{}{}", IMG_URL, path, item);
-		pages.push(Page {
-			index,
-			url,
-			..Default::default()
+		Ok(MangaPageResult {
+			entries: GuFengMh::parse_manga_list(url, ".book-list>li")?,
+			has_next_page: true,
 		})
 	}
 
-	Ok(pages)
+	fn get_manga_update(
+		&self,
+		mut manga: Manga,
+		needs_details: bool,
+		needs_chapters: bool,
+	) -> Result<Manga> {
+		if needs_details || needs_chapters {
+			let url = format!("{WWW_URL}/manhua/{}/", manga.key);
+			let html = Request::get(&url)?.html()?;
+
+			if needs_details {
+				manga.cover = Some(
+					html.select_first(".book-cover>.cover>img")
+						.and_then(|img| img.attr("src"))
+						.unwrap_or_default(),
+				);
+				manga.title = html
+					.select_first(".book-title>h1>span")
+					.and_then(|title| title.text())
+					.unwrap_or_default();
+				let author = html
+					.select_first("a[href*='author']")
+					.and_then(|author| author.text())
+					.unwrap_or_default();
+				manga.authors = if author.is_empty() {
+					None
+				} else {
+					Some(vec![author])
+				};
+				manga.description = html
+					.select_first("#intro-cut>p")
+					.and_then(|p| p.text())
+					.map(|text| {
+						text.replace("漫画简介：", "")
+							.replace("介绍:", "")
+							.trim()
+							.to_string()
+					});
+				let tags: Vec<String> = html
+					.select(".detail-list>li:nth-child(2)>span:nth-child(1)>a")
+					.map(|list| {
+						list.map(|tag| tag.text().unwrap_or_default().trim().to_string())
+							.filter(|tag| !tag.is_empty())
+							.collect::<Vec<String>>()
+					})
+					.unwrap_or_default();
+				manga.tags = if tags.is_empty() { None } else { Some(tags) };
+				manga.status = match html
+					.select_first(".detail-list>li:nth-child(1)>span:nth-child(1)>a")
+					.and_then(|status| status.text())
+					.unwrap_or_default()
+					.as_str()
+				{
+					"已完结" => MangaStatus::Completed,
+					"连载中" => MangaStatus::Ongoing,
+					_ => MangaStatus::Unknown,
+				};
+				manga.url = Some(url);
+				manga.content_rating = ContentRating::Safe;
+				manga.viewer = Viewer::Webtoon;
+			}
+
+			if needs_chapters {
+				manga.chapters = Some(GuFengMh::parse_chapter_list(&html, &manga.key)?);
+			}
+		}
+
+		Ok(manga)
+	}
+
+	fn get_page_list(&self, manga: Manga, chapter: Chapter) -> Result<Vec<Page>> {
+		let url = format!("{WWW_URL}/manhua/{}/{}.html", manga.key, chapter.key);
+		let text = Request::get(url)?.string()?;
+		let mut pages: Vec<Page> = Vec::new();
+
+		let Some(list) = substring_after(&text, "var chapterImages = ")
+			.and_then(|text| substring_before(text, ";"))
+		else {
+			return Ok(pages);
+		};
+		let Some(path) = substring_after(&text, "var chapterPath = ")
+			.and_then(|text| substring_before(text, ";"))
+			.map(|path| path.replace('"', ""))
+		else {
+			return Ok(pages);
+		};
+
+		let Ok(list) = serde_json::from_str::<Value>(list) else {
+			return Ok(pages);
+		};
+		let Some(list) = list.as_array() else {
+			return Ok(pages);
+		};
+
+		for item in list.iter() {
+			let Some(image) = item.as_str() else {
+				continue;
+			};
+			pages.push(Page {
+				content: PageContent::url(format!("{IMG_URL}/{path}{image}")),
+				..Default::default()
+			});
+		}
+
+		Ok(pages)
+	}
 }
+
+impl ListingProvider for GuFengMh {
+	fn get_manga_list(&self, listing: Listing, page: i32) -> Result<MangaPageResult> {
+		let name = match listing.id.as_str() {
+			"popularity" => "popularity",
+			"popularity-daily" => "popularity-daily",
+			"popularity-weekly" => "popularity-weekly",
+			"popularity-monthly" => "popularity-monthly",
+			"click" => "click",
+			"click-daily" => "click-daily",
+			"click-weekly" => "click-weekly",
+			"click-monthly" => "click-monthly",
+			"subscribe" => "subscribe",
+			_ => return self.get_search_manga_list(None, page, Vec::new()),
+		};
+		let url = format!("{WWW_URL}/rank/{name}/");
+		Ok(MangaPageResult {
+			entries: GuFengMh::parse_manga_list(url, ".rank-list>li")?,
+			has_next_page: false,
+		})
+	}
+}
+
+register_source!(GuFengMh, ListingProvider);

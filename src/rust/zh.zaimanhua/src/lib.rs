@@ -1,343 +1,277 @@
 #![no_std]
-extern crate alloc;
 
 use aidoku::{
-	error::Result,
+	alloc::{string::ToString, String, Vec},
 	helpers::uri::encode_uri,
+	imports::{error::AidokuError, net::Request},
 	prelude::*,
-	std::{
-		net::{HttpMethod, Request},
-		String, Vec,
-	},
-	Chapter, Filter, FilterType, Listing, Manga, MangaContentRating, MangaPageResult, MangaStatus,
-	MangaViewer, Page,
+	Chapter, ContentRating, FilterValue, Listing, ListingProvider, Manga, MangaPageResult,
+	MangaStatus, Page, PageContent, Result, Source, Viewer,
 };
-use alloc::string::ToString;
+use serde_json::Value;
 
 const WWW_URL: &str = "https://m.zaimanhua.com";
 const API_URL: &str = "https://manhua.zaimanhua.com/api/v1";
 const APP_URL: &str = "https://manhua.zaimanhua.com/app/v1";
 const V4_APP_URL: &str = "https://v4api.zaimanhua.com/app/v1";
 
-const FILTER_STATUS: [&str; 3] = ["0", "1", "2"];
-const FILTER_AUDIENCE: [&str; 4] = ["0", "3262", "3263", "3264"];
-const FILTER_THEME: [&str; 23] = [
-	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "11", "13", "14", "15", "16", "17", "18",
-	"19", "20", "21", "22", "23", "24",
-];
-const FILTER_CATE: [&str; 3] = ["0", "1", "2"];
-const FILTER_FIRST_LETTER: [&str; 28] = [
-	"", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r",
-	"s", "t", "u", "v", "w", "x", "y", "z", "9",
-];
 const FILTER_SORT_TYPE: [&str; 1] = ["0"];
 
-#[get_manga_list]
-fn get_manga_list(filters: Vec<Filter>, page: i32) -> Result<MangaPageResult> {
-	let mut query = String::new();
-	let mut status = String::from("0");
-	let mut audience = String::from("0");
-	let mut theme = String::from("0");
-	let mut cate = String::from("0");
-	let mut first_letter = String::from("");
-	let mut sort_type = String::from("0");
+fn jstr(value: &Value, key: &str) -> Option<String> {
+	value
+		.get(key)
+		.and_then(|v| v.as_str())
+		.map(|v| v.to_string())
+}
 
-	for filter in filters {
-		match filter.kind {
-			FilterType::Title => {
-				query = filter.value.as_string()?.read();
-			}
-			FilterType::Select => {
-				let index = filter.value.as_int()? as usize;
-				match filter.name.as_str() {
-					"状态" => {
-						status = FILTER_STATUS[index].to_string();
-					}
-					"受众" => {
-						audience = FILTER_AUDIENCE[index].to_string();
-					}
-					"题材" => {
-						theme = FILTER_THEME[index].to_string();
-					}
-					"类别" => {
-						cate = FILTER_CATE[index].to_string();
-					}
-					"字母" => {
-						first_letter = FILTER_FIRST_LETTER[index].to_string();
-					}
-					_ => continue,
-				}
-			}
-			FilterType::Sort => {
-				let value = match filter.value.as_object() {
-					Ok(value) => value,
-					Err(_) => continue,
-				};
-				let index = value.get("index").as_int()? as usize;
-				sort_type = FILTER_SORT_TYPE[index].to_string();
-			}
-			_ => continue,
-		}
-	}
-
-	let url = if query.is_empty() {
-		format!("{}/comic1/filter?sortType={}&page={}&size=18&status={}&audience={}&theme={}&cate={}&firstLetter={}",
-			API_URL, sort_type, page, status, audience, theme, cate, first_letter)
-	} else {
-		format!(
-			"{}/search/index?keyword={}&source=0&page={}&size=20",
-			APP_URL,
-			encode_uri(query.clone()),
-			page
-		)
-	};
-
-	let json = Request::new(url, HttpMethod::Get).json()?;
-	let data = json.as_object()?;
-	let data = data.get("data").as_object()?;
-	let mut mangas: Vec<Manga> = Vec::new();
-
-	if query.is_empty() {
-		let list = data.get("comicList").as_array()?;
-
-		for item in list {
-			let item = match item.as_object() {
-				Ok(item) => item,
-				Err(_) => continue,
-			};
-			let id = item.get("id").as_int()?.to_string();
-			let cover = item.get("cover").as_string()?.read();
-			let title = item.get("name").as_string()?.read();
-			mangas.push(Manga {
-				id,
-				cover,
-				title,
-				..Default::default()
-			});
-		}
-	} else {
-		let list = data.get("list").as_array()?;
-
-		for item in list {
-			let item = match item.as_object() {
-				Ok(item) => item,
-				Err(_) => continue,
-			};
-			let id = item.get("id").as_int()?.to_string();
-			let cover = item.get("cover").as_string()?.read();
-			let title = item.get("title").as_string()?.read();
-			mangas.push(Manga {
-				id,
-				cover,
-				title,
-				..Default::default()
-			});
-		}
-	}
-
-	Ok(MangaPageResult {
-		manga: mangas,
-		has_more: true,
+fn jnum(value: &Value, key: &str) -> Option<String> {
+	value.get(key).and_then(|v| {
+		v.as_i64()
+			.map(|n| n.to_string())
+			.or_else(|| v.as_str().map(|s| s.to_string()))
 	})
 }
 
-#[get_manga_listing]
-fn get_manga_listing(listing: Listing, page: i32) -> Result<MangaPageResult> {
-	let mut cate = String::new();
-	let mut duration = String::new();
+fn jobj<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+	value.get(key).filter(|v| v.is_object())
+}
 
-	match listing.name.as_str() {
-		"周人气排行" => {
-			cate.push_str("1");
-			duration.push_str("1");
-		}
-		"月人气排行" => {
-			cate.push_str("1");
-			duration.push_str("2");
-		}
-		"总人气排行" => {
-			cate.push_str("1");
-			duration.push_str("3");
-		}
-		"周点击排行" => {
-			cate.push_str("2");
-			duration.push_str("1");
-		}
-		"月点击排行" => {
-			cate.push_str("2");
-			duration.push_str("2");
-		}
-		"总点击排行" => {
-			cate.push_str("2");
-			duration.push_str("3");
-		}
-		_ => return get_manga_list(Vec::new(), page),
-	}
+fn jarr<'a>(value: &'a Value, key: &str) -> Option<&'a Vec<Value>> {
+	value.get(key).and_then(|v| v.as_array())
+}
 
-	let url = format!("{}/comic1/rank_list?channel=pc&app_name=zmh&version=1.0.0&page={}&size=10&duration={}&cate={}&tag=0&theme=0",
-		API_URL, page, duration, cate);
-	let json = Request::new(url, HttpMethod::Get).json()?;
-	let data = json.as_object()?;
-	let data = data.get("data").as_object()?;
-	let list = data.get("list").as_array()?;
-	let mut mangas: Vec<Manga> = Vec::new();
+fn jtags(value: &Value, key: &str) -> Vec<String> {
+	jarr(value, key)
+		.map(|list| {
+			list.iter()
+				.filter_map(|item| jstr(item, "tag_name"))
+				.collect::<Vec<String>>()
+		})
+		.unwrap_or_default()
+}
+
+fn parse_manga_list(list: &[Value], title_key: &str, key_name: &str) -> Vec<Manga> {
+	let mut entries: Vec<Manga> = Vec::new();
 
 	for item in list {
-		let item = match item.as_object() {
-			Ok(item) => item,
-			Err(_) => continue,
+		let Some(key) = jnum(item, key_name) else {
+			continue;
 		};
-		let id = item.get("comic_id").as_int()?.to_string();
-		let cover = item.get("cover").as_string()?.read();
-		let title = item.get("title").as_string()?.read();
-		mangas.push(Manga {
-			id,
-			cover,
-			title,
+		entries.push(Manga {
+			key,
+			cover: jstr(item, "cover"),
+			title: jstr(item, title_key).unwrap_or_default(),
 			..Default::default()
 		});
 	}
 
-	Ok(MangaPageResult {
-		manga: mangas,
-		has_more: true,
-	})
+	entries
 }
 
-#[get_manga_details]
-fn get_manga_details(id: String) -> Result<Manga> {
-	let url = format!("{}/comic/detail/{}", V4_APP_URL, id.clone());
-	let json = Request::new(url, HttpMethod::Get).json()?;
-	let data = json.as_object()?;
-	let data = data.get("data").as_object()?;
-	let data = data.get("data").as_object()?;
-	let cover = data.get("cover").as_string()?.read();
-	let title = data.get("title").as_string()?.read();
-	let authors = data.get("authors").as_array()?;
-	let author = authors
-		.map(|a| {
-			a.as_object()
-				.unwrap()
-				.get("tag_name")
-				.as_string()
-				.unwrap()
-				.read()
-		})
-		.collect::<Vec<String>>()
-		.join(", ");
-	let artist = String::new();
-	let description = data.get("description").as_string()?.read();
-	let url = format!("{}/pages/comic/detail?id={}", WWW_URL, id);
-	let categories = data
-		.get("types")
-		.as_array()?
-		.map(|a| {
-			a.as_object()
-				.unwrap()
-				.get("tag_name")
-				.as_string()
-				.unwrap()
-				.read()
-		})
-		.collect::<Vec<String>>();
-	let status = match data
-		.get("status")
-		.as_array()?
-		.get(0)
-		.as_object()?
-		.get("tag_name")
-		.as_string()?
-		.read()
-		.as_str()
-	{
-		"连载中" => MangaStatus::Ongoing,
-		"已完结" => MangaStatus::Completed,
-		_ => MangaStatus::Unknown,
-	};
-	let nsfw = MangaContentRating::Safe;
-	let viewer = MangaViewer::Rtl;
+struct Zaimanhua;
 
-	Ok(Manga {
-		id,
-		cover,
-		title,
-		author,
-		artist,
-		description,
-		url,
-		categories,
-		status,
-		nsfw,
-		viewer,
-	})
-}
+impl Source for Zaimanhua {
+	fn new() -> Self {
+		Self
+	}
 
-#[get_chapter_list]
-fn get_chapter_list(id: String) -> Result<Vec<Chapter>> {
-	let url = format!("{}/comic/detail/{}", V4_APP_URL, id.clone());
-	let json = Request::new(url, HttpMethod::Get).json()?;
-	let data = json.as_object()?;
-	let data = data.get("data").as_object()?;
-	let data = data.get("data").as_object()?;
-	let chapter_list = data.get("chapters").as_array()?;
-	let chapter = chapter_list.get(0).as_object()?;
-	let list = chapter.get("data").as_array()?;
-	let len = list.len();
-	let mut chapters: Vec<Chapter> = Vec::new();
+	fn get_search_manga_list(
+		&self,
+		query: Option<String>,
+		page: i32,
+		filters: Vec<FilterValue>,
+	) -> Result<MangaPageResult> {
+		let query = query.unwrap_or_default();
+		let mut status = String::from("0");
+		let mut audience = String::from("0");
+		let mut theme = String::from("0");
+		let mut cate = String::from("0");
+		let mut first_letter = String::new();
+		let mut sort_type = String::from("0");
 
-	for (index, item) in list.enumerate() {
-		let item = match item.as_object() {
-			Ok(item) => item,
-			Err(_) => continue,
+		for filter in filters {
+			match filter {
+				FilterValue::Select { id, value } => match id.as_str() {
+					"status" => status = value,
+					"audience" => audience = value,
+					"theme" => theme = value,
+					"cate" => cate = value,
+					"firstLetter" => first_letter = value,
+					_ => continue,
+				},
+				FilterValue::Sort { index, .. } => {
+					if let Some(value) = FILTER_SORT_TYPE.get(index as usize) {
+						sort_type = value.to_string();
+					}
+				}
+				_ => continue,
+			}
+		}
+
+		let url = if query.is_empty() {
+			format!("{API_URL}/comic1/filter?sortType={sort_type}&page={page}&size=18&status={status}&audience={audience}&theme={theme}&cate={cate}&firstLetter={first_letter}")
+		} else {
+			format!(
+				"{APP_URL}/search/index?keyword={}&source=0&page={page}&size=20",
+				encode_uri(query.clone())
+			)
 		};
-		let chapter_id = item.get("chapter_id").as_int()?.to_string();
-		let title = item.get("chapter_title").as_string()?.read();
-		let chapter = (len - index) as f32;
+
+		let json: Value = Request::get(url)?.json_owned::<Value>()?;
+		let data = json.get("data");
+		let entries = if query.is_empty() {
+			match data.and_then(|data| jarr(data, "comicList")) {
+				Some(list) => parse_manga_list(list, "name", "id"),
+				None => return Err(AidokuError::DeserializeError),
+			}
+		} else {
+			match data.and_then(|data| jarr(data, "list")) {
+				Some(list) => parse_manga_list(list, "title", "id"),
+				None => return Err(AidokuError::DeserializeError),
+			}
+		};
+
+		Ok(MangaPageResult {
+			entries,
+			has_next_page: true,
+		})
+	}
+
+	fn get_manga_update(
+		&self,
+		mut manga: Manga,
+		needs_details: bool,
+		needs_chapters: bool,
+	) -> Result<Manga> {
+		let url = format!("{V4_APP_URL}/comic/detail/{}", manga.key);
+		let json: Value = Request::get(url)?.json_owned::<Value>()?;
+		let data = json.get("data").and_then(|data| jobj(data, "data"));
+
+		if needs_details {
+			let Some(data) = data else {
+				return Err(AidokuError::DeserializeError);
+			};
+			manga.cover = jstr(data, "cover");
+			if let Some(title) = jstr(data, "title") {
+				manga.title = title;
+			}
+			let authors = jarr(data, "authors")
+				.map(|list| {
+					list.iter()
+						.filter_map(|author| jstr(author, "tag_name"))
+						.collect::<Vec<String>>()
+				})
+				.unwrap_or_default();
+			manga.authors = if authors.is_empty() {
+				None
+			} else {
+				Some(authors)
+			};
+			manga.description = jstr(data, "description");
+			manga.url = Some(format!("{WWW_URL}/pages/comic/detail?id={}", manga.key));
+			let tags = jtags(data, "types");
+			manga.tags = if tags.is_empty() { None } else { Some(tags) };
+			manga.status = match jarr(data, "status")
+				.and_then(|list| list.first())
+				.and_then(|status| jstr(status, "tag_name"))
+				.unwrap_or_default()
+				.as_str()
+			{
+				"连载中" => MangaStatus::Ongoing,
+				"已完结" => MangaStatus::Completed,
+				_ => MangaStatus::Unknown,
+			};
+			manga.content_rating = ContentRating::Safe;
+			manga.viewer = Viewer::RightToLeft;
+		}
+
+		if needs_chapters {
+			let mut chapters: Vec<Chapter> = Vec::new();
+			let list = data
+				.and_then(|data| jarr(data, "chapters"))
+				.and_then(|list| list.first())
+				.and_then(|chapter| jarr(chapter, "data"));
+
+			if let Some(list) = list {
+				let len = list.len();
+				for (index, item) in list.iter().enumerate() {
+					let Some(chapter_id) = jnum(item, "chapter_id") else {
+						continue;
+					};
+					chapters.push(Chapter {
+						key: chapter_id.clone(),
+						title: jstr(item, "chapter_title"),
+						chapter_number: Some((len - index) as f32),
+						url: Some(format!(
+							"{WWW_URL}/pages/comic/page?comic_id={}&chapter_id={chapter_id}",
+							manga.key
+						)),
+						..Default::default()
+					});
+				}
+			}
+
+			manga.chapters = Some(chapters);
+		}
+
+		Ok(manga)
+	}
+
+	fn get_page_list(&self, manga: Manga, chapter: Chapter) -> Result<Vec<Page>> {
 		let url = format!(
-			"{}/pages/comic/page?comic_id={}&chapter_id={}",
-			WWW_URL,
-			id.clone(),
-			chapter_id.clone()
+			"{API_URL}/comic1/chapter/detail?channel=pc&app_name=zmh&version=1.0.0&comic_id={}&chapter_id={}",
+			manga.key, chapter.key
 		);
-		chapters.push(Chapter {
-			id: chapter_id,
-			title,
-			chapter,
-			url,
-			..Default::default()
-		});
-	}
+		let json: Value = Request::get(url)?.json_owned::<Value>()?;
+		let mut pages: Vec<Page> = Vec::new();
 
-	Ok(chapters)
+		let list = json
+			.get("data")
+			.and_then(|data| jobj(data, "chapterInfo"))
+			.and_then(|info| jarr(info, "page_url"));
+
+		if let Some(list) = list {
+			for item in list {
+				let Some(url) = item.as_str() else {
+					continue;
+				};
+				pages.push(Page {
+					content: PageContent::url(url.to_string()),
+					..Default::default()
+				});
+			}
+		}
+
+		Ok(pages)
+	}
 }
 
-#[get_page_list]
-fn get_page_list(manga_id: String, chapter_id: String) -> Result<Vec<Page>> {
-	let url =
-		format!(
-		"{}/comic1/chapter/detail?channel=pc&app_name=zmh&version=1.0.0&comic_id={}&chapter_id={}",
-		API_URL, manga_id.clone(), chapter_id.clone()
-	);
-	let json = Request::new(url, HttpMethod::Get).json()?;
-	let data = json.as_object()?;
-	let data = data.get("data").as_object()?;
-	let data = data.get("chapterInfo").as_object()?;
-	let list = data.get("page_url").as_array()?;
-	let mut pages: Vec<Page> = Vec::new();
-
-	for (index, item) in list.enumerate() {
-		let item = match item.as_string() {
-			Ok(item) => item,
-			Err(_) => continue,
+impl ListingProvider for Zaimanhua {
+	fn get_manga_list(&self, listing: Listing, page: i32) -> Result<MangaPageResult> {
+		let (cate, duration) = match listing.id.as_str() {
+			"pop_week" => ("1", "1"),
+			"pop_month" => ("1", "2"),
+			"pop_all" => ("1", "3"),
+			"click_week" => ("2", "1"),
+			"click_month" => ("2", "2"),
+			"click_all" => ("2", "3"),
+			_ => {
+				return self.get_search_manga_list(None, page, Vec::new());
+			}
 		};
-		let index = index as i32;
-		let url = item.read();
-		pages.push(Page {
-			index,
-			url,
-			..Default::default()
+
+		let url = format!("{API_URL}/comic1/rank_list?channel=pc&app_name=zmh&version=1.0.0&page={page}&size=10&duration={duration}&cate={cate}&tag=0&theme=0");
+		let json: Value = Request::get(url)?.json_owned::<Value>()?;
+		let list = json
+			.get("data")
+			.and_then(|data| jarr(data, "list"))
+			.ok_or(AidokuError::DeserializeError)?;
+
+		Ok(MangaPageResult {
+			entries: parse_manga_list(list, "title", "comic_id"),
+			has_next_page: true,
 		})
 	}
-
-	Ok(pages)
 }
+
+register_source!(Zaimanhua, ListingProvider);

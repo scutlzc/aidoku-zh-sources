@@ -1,11 +1,13 @@
 {
   "info": {
     "id": "zh.nicohub",
-    "lang": "zh",
     "name": "Nico",
-    "version": 1,
+    "version": 2,
+    "minAppVersion": "0.7",
     "url": "https://nicohub.cc/index?category=comic",
-    "nsfw": 0
-  },
-  "deprecated": true
+    "contentRating": 0,
+    "languages": [
+      "zh"
+    ]
+  }
 }

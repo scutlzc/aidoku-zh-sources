@@ -1,10 +1,8 @@
 [
   {
-    "type": "title"
-  },
-  {
     "type": "select",
-    "name": "类型",
+    "id": "category",
+    "title": "类型",
     "options": [
       "全部",
       "国漫",
@@ -26,7 +24,6 @@
       "灵异",
       "大女主",
       "剧情",
-      "恋爱",
       "玄幻",
       "女神",
       "科幻",
@@ -41,6 +38,42 @@
       "悬疑",
       "修仙",
       "战斗"
+    ],
+    "ids": [
+      "",
+      "cn",
+      "kr",
+      "jp",
+      "fuchou",
+      "gufeng",
+      "qihuan",
+      "nixi",
+      "lianai",
+      "yineng",
+      "zhaixiang",
+      "chuanyue",
+      "rexue",
+      "chunai",
+      "xitong",
+      "chongsheng",
+      "maoxian",
+      "lingyi",
+      "danvzhu",
+      "juqing",
+      "xuanhuan",
+      "nvshen",
+      "kehuan",
+      "mohuan",
+      "tuili",
+      "lieqi",
+      "zhiyu",
+      "dushi",
+      "yixing",
+      "qingchun",
+      "mori",
+      "xuanyi",
+      "xiuxian",
+      "zhandou"
     ]
   }
 ]

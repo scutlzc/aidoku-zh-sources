@@ -1,10 +1,8 @@
 [
   {
-    "type": "title"
-  },
-  {
     "type": "select",
-    "name": "类型",
+    "id": "category",
+    "title": "类型",
     "options": [
       "全部",
       "恋爱",
@@ -32,16 +30,68 @@
       "韩漫",
       "少年",
       "其它"
+    ],
+    "ids": [
+      "all",
+      "lianai",
+      "chunai",
+      "gufeng",
+      "yineng",
+      "xuanyi",
+      "juqing",
+      "kehuan",
+      "qihuan",
+      "xuanhuan",
+      "chuanyue",
+      "maoxian",
+      "tuili",
+      "wuxia",
+      "gedou",
+      "zhanzheng",
+      "rexie",
+      "gaoxiao",
+      "danuzhu",
+      "dushi",
+      "zongcai",
+      "hougong",
+      "richang",
+      "hanman",
+      "shaonian",
+      "qita"
     ]
   },
   {
     "type": "select",
-    "name": "地区",
-    "options": ["全部", "中国", "日本", "韩国", "欧美"]
+    "id": "region",
+    "title": "地区",
+    "options": [
+      "全部",
+      "中国",
+      "日本",
+      "韩国",
+      "欧美"
+    ],
+    "ids": [
+      "all",
+      "cn",
+      "jp",
+      "kr",
+      "en"
+    ]
   },
   {
     "type": "select",
-    "name": "状态",
-    "options": ["全部", "连载中", "已完结"]
+    "id": "status",
+    "title": "状态",
+    "options": [
+      "全部",
+      "连载中",
+      "已完结"
+    ],
+    "ids": [
+      "all",
+      "serial",
+      "pub"
+    ]
   }
 ]

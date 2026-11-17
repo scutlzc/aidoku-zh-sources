@@ -1,6 +1,12 @@
-cargo +nightly build --release
-mkdir -p target/wasm32-unknown-unknown/release/Payload
-cp res/* target/wasm32-unknown-unknown/release/Payload
-cp target/wasm32-unknown-unknown/release/*.wasm target/wasm32-unknown-unknown/release/Payload/main.wasm
-cd target/wasm32-unknown-unknown/release ; zip -r package.aix Payload
-mv package.aix ../../../package.aix
+#!/bin/bash
+set -e
+
+cargo build --release --target wasm32-unknown-unknown
+
+out=target/wasm32-unknown-unknown/release
+mkdir -p "$out/Payload"
+cp res/* "$out/Payload"
+cp "$out"/*.wasm "$out/Payload/main.wasm"
+rm -f ./package.aix
+(cd "$out" && zip -qr package.aix Payload)
+mv "$out/package.aix" ./package.aix

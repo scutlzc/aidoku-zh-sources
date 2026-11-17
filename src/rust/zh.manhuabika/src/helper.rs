@@ -1,16 +1,15 @@
 use aidoku::{
-	error::{AidokuError, AidokuErrorKind},
-	helpers::{substring::Substring, uri::encode_uri},
-	prelude::*,
-	std::{
-		current_date,
-		defaults::{defaults_get, defaults_set},
-		net::{HttpMethod, Request},
-		String, ValueRef,
+	alloc::{format, string::String, string::ToString},
+	helpers::uri::encode_uri,
+	imports::{
+		defaults::{defaults_get, defaults_set, DefaultValue},
+		net::{Request, Response},
 	},
+	prelude::*,
+	Result,
 };
-use alloc::string::ToString;
 use md5::compute;
+use serde_json::Value;
 
 use crate::crypto;
 
@@ -20,8 +19,28 @@ const API_KEY: &str = "C69BAF41DA5ABD1FFEDC6D2FEA56B";
 const WWW_URL: &str = "https://manhuabika.com";
 const API_URL: &str = "https://picaapi.picacomic.com";
 
+#[derive(Clone, Copy)]
+pub enum Method {
+	Get,
+	Post,
+}
+
+impl Method {
+	fn as_str(&self) -> &'static str {
+		match self {
+			Method::Get => "Get",
+			Method::Post => "Post",
+		}
+	}
+}
+
+pub fn substring_after(text: &str, pattern: &str) -> Option<String> {
+	text.find(pattern)
+		.map(|index| text[index + pattern.len()..].to_string())
+}
+
 pub fn gen_time() -> String {
-	(current_date() as i64).to_string()
+	(aidoku::imports::std::current_date() as i64).to_string()
 }
 
 pub fn gen_nonce() -> String {
@@ -29,22 +48,21 @@ pub fn gen_nonce() -> String {
 }
 
 pub fn gen_signature(url: &str, time: &str, nonce: &str, method: &str) -> String {
-	let url = url.substring_after(&format!("{}/", API_URL)).unwrap();
+	let url = substring_after(url, &format!("{}/", API_URL)).unwrap_or_default();
 	let text = format!("{}{}{}{}{}", url, time, nonce, method, API_KEY).to_ascii_lowercase();
 	crypto::encrypt(text.as_bytes(), KEY)
 }
 
-pub fn gen_request(url: String, method: HttpMethod) -> Request {
+fn base_request(url: String, method: Method, authorization: String) -> Result<Request> {
 	let time = gen_time();
 	let nonce = gen_nonce();
-	let signature = gen_signature(&url, &time, &nonce, &format!("{:?}", method));
-	let token = defaults_get("token").unwrap().as_string().unwrap().read();
-	let authorization = if !url.contains("sign-in") && token.is_empty() {
-		login().unwrap()
-	} else {
-		token
+	let signature = gen_signature(&url, &time, &nonce, method.as_str());
+	let request = match method {
+		Method::Get => Request::get(url.as_str())?,
+		Method::Post => Request::post(url.as_str())?,
 	};
-	Request::new(url, method)
+
+	Ok(request
 		.header("api-key", API_KEY)
 		.header("app-build-version", "45")
 		.header("app-channel", "1")
@@ -52,24 +70,36 @@ pub fn gen_request(url: String, method: HttpMethod) -> Request {
 		.header("app-uuid", "defaultUuid")
 		.header("app-version", "2.2.1.3.3.4")
 		.header("image-quality", "original")
-		.header("time", &time)
-		.header("nonce", &nonce)
-		.header("signature", &signature)
+		.header("time", time.as_str())
+		.header("nonce", nonce.as_str())
+		.header("signature", signature.as_str())
 		.header("Accept", "application/vnd.picacomic.com.v1+json")
-		.header("Authorization", &authorization)
+		.header("Authorization", authorization.as_str())
 		.header("Content-Type", "application/json; charset=UTF-8")
-		.header("User-Agent", "okhttp/3.8.1")
+		.header("User-Agent", "okhttp/3.8.1"))
 }
 
-pub fn login() -> Result<String, AidokuError> {
-	let request = gen_request(gen_login_url(), HttpMethod::Post).header("Authorization", "");
-	let username = defaults_get("username")?.as_string()?.read();
-	let password = defaults_get("password")?.as_string()?.read();
+pub fn get_token() -> String {
+	defaults_get::<String>("token").unwrap_or_default()
+}
+
+pub fn gen_request(url: String) -> Result<Request> {
+	let token = get_token();
+	let authorization = if !url.contains("sign-in") && token.is_empty() {
+		login()?
+	} else {
+		token
+	};
+
+	base_request(url, Method::Get, authorization)
+}
+
+pub fn login() -> Result<String> {
+	let username = defaults_get::<String>("username").unwrap_or_default();
+	let password = defaults_get::<String>("password").unwrap_or_default();
 
 	if username.is_empty() || password.is_empty() {
-		return Err(AidokuError {
-			reason: AidokuErrorKind::DefaultNotFound,
-		});
+		bail!("Username or password is empty");
 	}
 
 	let body = format!(
@@ -79,28 +109,57 @@ pub fn login() -> Result<String, AidokuError> {
 		}}"#,
 		username, password
 	);
+	let request = base_request(gen_login_url(), Method::Post, String::new())?;
+	let response = request.body(body.as_bytes()).send()?;
 
-	let request = request.body(body.as_bytes());
-
-	request.send();
-
-	if request.status_code() != 200 {
-		return Err(AidokuError {
-			reason: AidokuErrorKind::DefaultNotFound,
-		});
+	if response.status_code() != 200 {
+		bail!("Failed to login");
 	}
 
-	let json = request.json()?;
-	let data = json.as_object()?;
-	let data = data.get("data").as_object()?;
-	let token = data.get("token");
+	let json: Value = response.get_json_owned::<Value>()?;
+	let token = json
+		.get("data")
+		.and_then(|data| data.get("token"))
+		.and_then(|token| token.as_str())
+		.unwrap_or_default()
+		.to_string();
 
-	defaults_set("token", token.clone());
+	defaults_set("token", DefaultValue::String(token.clone()));
 
-	Ok(token.as_string()?.read())
+	Ok(token)
 }
 
-pub fn search(keyword: String, page: i32) -> Result<ValueRef, AidokuError> {
+fn json_from_response(response: Response) -> Result<Value> {
+	response.get_json_owned::<Value>()
+}
+
+fn send_with_retry(
+	request: Request,
+	body: Option<String>,
+	url: String,
+	method: Method,
+) -> Result<Value> {
+	let request = match body {
+		Some(ref body) => request.body(body.as_bytes()),
+		None => request,
+	};
+	let response = request.send()?;
+
+	if response.status_code() == 401 {
+		let token = login()?;
+		let request = base_request(url, method, token)?;
+		let request = match body {
+			Some(ref body) => request.body(body.as_bytes()),
+			None => request,
+		};
+
+		return json_from_response(request.send()?);
+	}
+
+	json_from_response(response)
+}
+
+pub fn search(keyword: String, page: i32) -> Result<Value> {
 	let url = gen_search_url(page);
 	let body = format!(
 		r#"{{
@@ -109,15 +168,9 @@ pub fn search(keyword: String, page: i32) -> Result<ValueRef, AidokuError> {
 		}}"#,
 		keyword,
 	);
-	let request = gen_request(url, HttpMethod::Post).body(body.as_bytes());
+	let request = gen_request(url.clone())?;
 
-	request.send();
-
-	if request.status_code() == 401 {
-		request.header("Authorization", &login()?).json()
-	} else {
-		request.json()
-	}
+	send_with_retry(request, Some(body), url, Method::Post)
 }
 
 pub fn gen_login_url() -> String {
@@ -176,14 +229,8 @@ pub fn gen_page_list_url(manga_id: String, chapter_id: String, page: i32) -> Str
 	)
 }
 
-pub fn get_json(url: String) -> Result<ValueRef, AidokuError> {
-	let request = gen_request(url, HttpMethod::Get);
+pub fn get_json(url: String) -> Result<Value> {
+	let request = gen_request(url.clone())?;
 
-	request.send();
-
-	if request.status_code() == 401 {
-		request.header("Authorization", &login()?).json()
-	} else {
-		request.json()
-	}
+	send_with_retry(request, None, url, Method::Get)
 }

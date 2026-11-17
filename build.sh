@@ -1,27 +1,16 @@
 #!/bin/bash
+set -e
 
-for src in ./src/as/*; do
-  (
-    cd "$src"
-
-    if [ "$(cat ./res/source.json | grep 'deprecated' | awk '{print $2}')" == "true" ]; then
-      rm -rf ./build/package.aix
-    else
-      npm run build
-    fi
-  )
-done
+# remove stale package files so removed sources don't linger in the output
+rm -f src/rust/*/package.aix
 
 for src in ./src/rust/*; do
   (
     cd "$src"
-
-    if [ "$(cat ./res/source.json | grep 'deprecated' | awk '{print $2}')" == "true" ]; then
-      rm -rf ./package.aix
-    else
-      ./build.sh -a
-    fi
+    ./build.sh
   )
 done
 
-aidoku build ./src/**/*.aix
+# regenerate the published source list (public/index.json + sources + icons)
+rm -rf public
+aidoku build ./src/rust/*/package.aix

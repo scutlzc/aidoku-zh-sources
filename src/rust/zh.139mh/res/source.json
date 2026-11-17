@@ -1,11 +1,11 @@
 {
   "info": {
     "id": "zh.139mh",
-    "lang": "zh",
     "name": "139漫画",
-    "version": 1,
+    "version": 2,
+    "minAppVersion": "0.7",
     "url": "https://139mh.com",
-    "nsfw": 0
-  },
-  "deprecated": true
+    "contentRating": 0,
+    "languages": ["zh"]
+  }
 }

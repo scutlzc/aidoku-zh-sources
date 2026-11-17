@@ -1,10 +1,8 @@
 [
   {
-    "type": "title"
-  },
-  {
     "type": "select",
-    "name": "标签",
+    "id": "tag",
+    "title": "标签",
     "options": [
       "全部",
       "巨乳",
@@ -28,21 +26,45 @@
       "暧昧",
       "大尺度",
       "正妹"
+    ],
+    "ids": [
+      "",
+      "61",
+      "63",
+      "62",
+      "64",
+      "11",
+      "15",
+      "17",
+      "29",
+      "31",
+      "67",
+      "68",
+      "69",
+      "75",
+      "78",
+      "84",
+      "86",
+      "87",
+      "91",
+      "98",
+      "106",
+      "114"
     ]
   },
   {
     "type": "select",
-    "name": "进度",
-    "options": ["全部", "连载", "完结"]
+    "id": "finish",
+    "title": "进度",
+    "options": ["全部", "连载", "完结"],
+    "ids": ["", "1", "2"]
   },
   {
     "type": "sort",
-    "name": "排序",
+    "id": "sort",
+    "title": "排序",
     "canAscend": false,
     "options": ["热门人气", "更新时间"],
-    "default": {
-      "index": 0,
-      "ascending": false
-    }
+    "default": { "index": 0, "ascending": false }
   }
 ]

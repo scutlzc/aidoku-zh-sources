@@ -1,263 +1,263 @@
 #![no_std]
-extern crate alloc;
 
 use aidoku::{
-	error::Result,
-	helpers::{substring::Substring, uri::encode_uri},
+	alloc::{string::ToString, String, Vec},
+	helpers::uri::encode_uri,
+	imports::net::Request,
 	prelude::*,
-	std::{
-		json,
-		net::{HttpMethod, Request},
-		String, Vec,
-	},
-	Chapter, Filter, FilterType, Manga, MangaContentRating, MangaPageResult, MangaStatus,
-	MangaViewer, Page,
+	Chapter, ContentRating, FilterValue, ImageRequestProvider, Manga, MangaPageResult, MangaStatus,
+	Page, PageContent, PageContext, Result, Source, Viewer,
 };
-use alloc::string::ToString;
+use serde_json::Value;
 
 const WWW_URL: &str = "https://www.ho5ho.com";
 const MANGA_URL: &str = "https://www.ho5ho.com/%E4%B8%AD%E5%AD%97h%E6%BC%AB";
 
-const FILTER_CATEGORY: [&str; 31] = [
-	"",
-	"m女",
-	"m男",
-	"ntr",
-	"亂倫",
-	"催眠",
-	"全彩",
-	"可愛",
-	"同人",
-	"多p",
-	"女同",
-	"女性向",
-	"姐姐",
-	"學生",
-	"巨乳",
-	"幻想",
-	"強姦",
-	"懷孕",
-	"接吻",
-	"正太",
-	"母子",
-	"母狗",
-	"深喉",
-	"熟女",
-	"痴女",
-	"聖水",
-	"肉感",
-	"肛交",
-	"變態",
-	"貧乳",
-	"韓漫",
-];
 const FILTER_SORT: [&str; 3] = ["latest", "rating", "views"];
 
-#[get_manga_list]
-fn get_manga_list(filters: Vec<Filter>, page: i32) -> Result<MangaPageResult> {
-	let mut query = String::new();
-	let mut category = String::new();
-	let mut sort = String::from("latest");
+struct Ho5Ho;
 
-	for filter in filters {
-		match filter.kind {
-			FilterType::Title => {
-				query = filter.value.as_string()?.read();
-			}
-			FilterType::Select => {
-				let index = filter.value.as_int()? as usize;
-				match filter.name.as_str() {
-					"类别" => {
-						category = FILTER_CATEGORY[index].to_string();
-					}
-					_ => continue,
-				}
-			}
-			FilterType::Sort => {
-				let value = match filter.value.as_object() {
-					Ok(value) => value,
-					Err(_) => continue,
-				};
-				let index = value.get("index").as_int()? as usize;
-				sort = FILTER_SORT[index].to_string();
-			}
-			_ => continue,
+impl Ho5Ho {
+	fn parse_manga_list(url: String) -> Result<Vec<Manga>> {
+		let html = Request::get(url)?.html()?;
+		let mut entries: Vec<Manga> = Vec::new();
+
+		let Some(items) = html.select("div[class*='c-image-hover']>a") else {
+			return Ok(entries);
+		};
+
+		for item in items {
+			let list: Vec<String> = item
+				.attr("href")
+				.unwrap_or_default()
+				.split('/')
+				.filter(|part| !part.is_empty())
+				.map(|part| part.to_string())
+				.collect();
+			let Some(key) = list.get(3) else {
+				continue;
+			};
+			let cover = item
+				.select_first("img")
+				.and_then(|img| img.attr("data-src"))
+				.unwrap_or_default();
+			entries.push(Manga {
+				key: key.clone(),
+				title: item.attr("title").unwrap_or_default(),
+				cover: Some(encode_uri(cover)),
+				..Default::default()
+			});
 		}
+
+		Ok(entries)
 	}
 
-	let url = if query.is_empty() {
-		if category.is_empty() {
-			format!("{}/page/{}/?m_orderby={}", WWW_URL, page, sort)
+	fn parse_chapter_list(html: &aidoku::imports::html::Document) -> Result<Vec<Chapter>> {
+		let mut chapters: Vec<Chapter> = Vec::new();
+
+		if let Some(items) = html.select(".wp-manga-chapter>a") {
+			for (index, item) in items.enumerate() {
+				let url = item.attr("href").unwrap_or_default();
+				let key = url
+					.split('/')
+					.filter(|part| !part.is_empty())
+					.map(|part| part.to_string())
+					.collect::<Vec<String>>()
+					.pop()
+					.unwrap_or_default();
+				if key.is_empty() {
+					continue;
+				}
+				let title = item.text().unwrap_or_default();
+				chapters.push(Chapter {
+					key,
+					title: Some(title),
+					chapter_number: Some((index + 1) as f32),
+					url: Some(url),
+					..Default::default()
+				});
+			}
+		}
+		chapters.reverse();
+
+		Ok(chapters)
+	}
+}
+
+fn substring_after<'a>(value: &'a str, pattern: &str) -> Option<&'a str> {
+	value
+		.find(pattern)
+		.map(|index| &value[index + pattern.len()..])
+}
+
+fn substring_before<'a>(value: &'a str, pattern: &str) -> Option<&'a str> {
+	value.find(pattern).map(|index| &value[..index])
+}
+
+impl Source for Ho5Ho {
+	fn new() -> Self {
+		Self
+	}
+
+	fn get_search_manga_list(
+		&self,
+		query: Option<String>,
+		page: i32,
+		filters: Vec<FilterValue>,
+	) -> Result<MangaPageResult> {
+		let mut category = String::new();
+		let mut sort = String::from("latest");
+
+		for filter in filters {
+			match filter {
+				FilterValue::Select { id, value } => {
+					if id == "category" {
+						category = value;
+					}
+				}
+				FilterValue::Sort { index, .. } => {
+					sort = FILTER_SORT
+						.get(index as usize)
+						.copied()
+						.unwrap_or_default()
+						.to_string();
+				}
+				_ => continue,
+			}
+		}
+
+		let query = query.unwrap_or_default();
+		let url = if query.is_empty() {
+			if category.is_empty() {
+				format!("{WWW_URL}/page/{page}/?m_orderby={sort}")
+			} else {
+				format!(
+					"{WWW_URL}/manga-genre/{}/page/{page}/?m_orderby={sort}",
+					encode_uri(category)
+				)
+			}
 		} else {
 			format!(
-				"{}/manga-genre/{}/page/{}/?m_orderby={}",
-				WWW_URL,
-				encode_uri(category),
-				page,
-				sort
+				"{WWW_URL}/page/{page}/?s={}&post_type=wp-manga",
+				encode_uri(query)
 			)
-		}
-	} else {
-		format!(
-			"{}/page/{}/?s={}&post_type=wp-manga",
-			WWW_URL,
-			page,
-			encode_uri(query)
-		)
-	};
-
-	let html = Request::new(url, HttpMethod::Get).html()?;
-	let has_more = true;
-	let mut mangas: Vec<Manga> = Vec::new();
-
-	for item in html.select("div[class*='c-image-hover']>a").array() {
-		let item = match item.as_node() {
-			Ok(node) => node,
-			Err(_) => continue,
 		};
-		let list = item
-			.attr("href")
-			.read()
-			.split("/")
-			.filter(|a| !a.is_empty())
-			.map(|a| a.to_string())
-			.collect::<Vec<String>>();
-		let id = (&list[3]).to_string();
-		let cover = item.select("img").attr("data-src").read();
-		let title = item.attr("title").read();
-		mangas.push(Manga {
-			id,
-			cover: encode_uri(cover),
-			title,
-			..Default::default()
-		});
-	}
 
-	Ok(MangaPageResult {
-		manga: mangas,
-		has_more,
-	})
-}
-
-#[get_manga_details]
-fn get_manga_details(id: String) -> Result<Manga> {
-	let url = format!("{}/{}/", MANGA_URL, id.clone());
-	let html = Request::new(url.clone(), HttpMethod::Get).html()?;
-	let cover = html
-		.select(".summary_image>a>img")
-		.attr("data-src")
-		.read()
-		.replace("193x278", "175x238");
-	let title = html.select(".post-title>h1").text().read();
-	let author = html
-		.select(".author-content>a")
-		.array()
-		.map(|a| a.as_node().unwrap().text().read())
-		.collect::<Vec<String>>()
-		.join(", ");
-	let artist = String::new();
-	let description = html
-		.select(".description-summary>div>p")
-		.array()
-		.map(|a| a.as_node().unwrap().text().read())
-		.collect::<Vec<String>>()
-		.join("\n");
-	let categories = html
-		.select(".genres-content>a")
-		.array()
-		.map(|a| a.as_node().unwrap().text().read())
-		.collect::<Vec<String>>();
-	let status = match html
-		.select(".post-status>div:nth-child(2)>.summary-content")
-		.text()
-		.read()
-		.trim()
-		.to_string()
-		.as_str()
-	{
-		"OnGoing" => MangaStatus::Ongoing,
-		"Completed" => MangaStatus::Completed,
-		_ => MangaStatus::Unknown,
-	};
-	let nsfw = MangaContentRating::Nsfw;
-	let viewer = MangaViewer::Rtl;
-
-	Ok(Manga {
-		id,
-		cover: encode_uri(cover),
-		title,
-		author,
-		artist,
-		description,
-		url,
-		categories,
-		status,
-		nsfw,
-		viewer,
-	})
-}
-
-#[get_chapter_list]
-fn get_chapter_list(id: String) -> Result<Vec<Chapter>> {
-	let url = format!("{}/{}/", MANGA_URL, id.clone());
-	let html = Request::new(url.clone(), HttpMethod::Get).html()?;
-	let html = html.select(".wp-manga-chapter>a");
-	let mut chapters: Vec<Chapter> = Vec::new();
-
-	for (index, item) in html.array().enumerate() {
-		let item = match item.as_node() {
-			Ok(node) => node,
-			Err(_) => continue,
-		};
-		let url = item.attr("href").read();
-		let id = url
-			.split("/")
-			.filter(|a| !a.is_empty())
-			.map(|a| a.to_string())
-			.collect::<Vec<String>>()
-			.pop()
-			.unwrap();
-		let title = item.text().read();
-		let chapter = (index + 1) as f32;
-		chapters.push(Chapter {
-			id,
-			title,
-			chapter,
-			url,
-			..Default::default()
-		});
-	}
-	chapters.reverse();
-
-	Ok(chapters)
-}
-
-#[get_page_list]
-fn get_page_list(manga_id: String, chapter_id: String) -> Result<Vec<Page>> {
-	let url = format!("{}/{}/{}/", MANGA_URL, manga_id, chapter_id);
-	let text = Request::new(url.clone(), HttpMethod::Get).string()?;
-	let list = text
-		.substring_after("var chapter_preloaded_images = ")
-		.unwrap()
-		.substring_before(", chapter_images_per_page =")
-		.unwrap();
-	let list = json::parse(list).unwrap().as_array()?;
-	let mut pages: Vec<Page> = Vec::new();
-
-	for (index, item) in list.enumerate() {
-		let index = index as i32;
-		let url = item.as_string()?.read();
-		pages.push(Page {
-			index,
-			url,
-			..Default::default()
+		Ok(MangaPageResult {
+			entries: Ho5Ho::parse_manga_list(url)?,
+			has_next_page: true,
 		})
 	}
 
-	Ok(pages)
+	fn get_manga_update(
+		&self,
+		mut manga: Manga,
+		needs_details: bool,
+		needs_chapters: bool,
+	) -> Result<Manga> {
+		if needs_details || needs_chapters {
+			let url = format!("{MANGA_URL}/{}/", manga.key);
+			let html = Request::get(&url)?.html()?;
+
+			if needs_details {
+				let cover = html
+					.select_first(".summary_image>a>img")
+					.and_then(|img| img.attr("data-src"))
+					.unwrap_or_default()
+					.replace("193x278", "175x238");
+				manga.cover = Some(encode_uri(cover));
+				manga.title = html
+					.select_first(".post-title>h1")
+					.and_then(|title| title.text())
+					.unwrap_or_default();
+				let authors = html
+					.select(".author-content>a")
+					.map(|authors| {
+						authors
+							.map(|author| author.text().unwrap_or_default())
+							.collect::<Vec<String>>()
+					})
+					.unwrap_or_default();
+				manga.authors = if authors.is_empty() {
+					None
+				} else {
+					Some(authors)
+				};
+				manga.description = html
+					.select(".description-summary>div>p")
+					.map(|paragraphs| {
+						paragraphs
+							.map(|paragraph| paragraph.text().unwrap_or_default())
+							.collect::<Vec<String>>()
+					})
+					.map(|paragraphs| paragraphs.join("\n"));
+				let tags = html
+					.select(".genres-content>a")
+					.map(|tags| {
+						tags.map(|tag| tag.text().unwrap_or_default())
+							.collect::<Vec<String>>()
+					})
+					.unwrap_or_default();
+				manga.tags = if tags.is_empty() { None } else { Some(tags) };
+				manga.status = match html
+					.select_first(".post-status>div:nth-child(2)>.summary-content")
+					.and_then(|status| status.text())
+					.unwrap_or_default()
+					.trim()
+				{
+					"OnGoing" => MangaStatus::Ongoing,
+					"Completed" => MangaStatus::Completed,
+					_ => MangaStatus::Unknown,
+				};
+				manga.url = Some(url);
+				manga.content_rating = ContentRating::NSFW;
+				manga.viewer = Viewer::RightToLeft;
+			}
+
+			if needs_chapters {
+				manga.chapters = Some(Ho5Ho::parse_chapter_list(&html)?);
+			}
+		}
+
+		Ok(manga)
+	}
+
+	fn get_page_list(&self, manga: Manga, chapter: Chapter) -> Result<Vec<Page>> {
+		let url = format!("{MANGA_URL}/{}/{}/", manga.key, chapter.key);
+		let text = Request::get(url)?.string()?;
+		let mut pages: Vec<Page> = Vec::new();
+
+		let Some(list) = substring_after(&text, "var chapter_preloaded_images = ")
+			.and_then(|text| substring_before(text, ", chapter_images_per_page ="))
+		else {
+			return Ok(pages);
+		};
+
+		let Ok(list) = serde_json::from_str::<Value>(list) else {
+			return Ok(pages);
+		};
+		let Some(list) = list.as_array() else {
+			return Ok(pages);
+		};
+
+		for item in list.iter() {
+			let Some(image) = item.as_str() else {
+				continue;
+			};
+			pages.push(Page {
+				content: PageContent::url(image.to_string()),
+				..Default::default()
+			});
+		}
+
+		Ok(pages)
+	}
 }
 
-#[modify_image_request]
-fn modify_image_request(request: Request) {
-	request.header("Referer", WWW_URL);
+impl ImageRequestProvider for Ho5Ho {
+	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
+		Ok(Request::get(url)?.header("Referer", WWW_URL))
+	}
 }
+
+register_source!(Ho5Ho, ImageRequestProvider);

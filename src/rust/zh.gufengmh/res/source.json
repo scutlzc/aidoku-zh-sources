@@ -1,39 +1,22 @@
 {
   "info": {
     "id": "zh.gufengmh",
-    "lang": "zh",
     "name": "古风漫画",
-    "version": 3,
+    "version": 4,
+    "minAppVersion": "0.7",
     "url": "https://www.gufengmh.com",
-    "nsfw": 0
+    "contentRating": 0,
+    "languages": ["zh"]
   },
   "listings": [
-    {
-      "name": "总人气榜"
-    },
-    {
-      "name": "日人气榜"
-    },
-    {
-      "name": "周人气榜"
-    },
-    {
-      "name": "月人气榜"
-    },
-    {
-      "name": "总点击榜"
-    },
-    {
-      "name": "日点击榜"
-    },
-    {
-      "name": "周点击榜"
-    },
-    {
-      "name": "月点击榜"
-    },
-    {
-      "name": "总订阅榜"
-    }
+    { "id": "popularity", "name": "总人气榜" },
+    { "id": "popularity-daily", "name": "日人气榜" },
+    { "id": "popularity-weekly", "name": "周人气榜" },
+    { "id": "popularity-monthly", "name": "月人气榜" },
+    { "id": "click", "name": "总点击榜" },
+    { "id": "click-daily", "name": "日点击榜" },
+    { "id": "click-weekly", "name": "周点击榜" },
+    { "id": "click-monthly", "name": "月点击榜" },
+    { "id": "subscribe", "name": "总订阅榜" }
   ]
 }

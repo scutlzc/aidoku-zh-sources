@@ -6,7 +6,5 @@
 src/**/*.aix
 src/**/public
 
-src/as/*/build
-src/as/*/node_modules
-
 src/rust/*/target
+.build/

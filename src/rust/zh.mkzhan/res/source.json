@@ -1,36 +1,21 @@
 {
   "info": {
     "id": "zh.mkzhan",
-    "lang": "zh",
     "name": "漫客栈",
-    "version": 1,
+    "version": 2,
+    "minAppVersion": "0.7",
     "url": "https://www.mkzhan.com",
-    "nsfw": 0
+    "contentRating": 0,
+    "languages": ["zh"]
   },
   "listings": [
-    {
-      "name": "人气榜"
-    },
-    {
-      "name": "收藏榜"
-    },
-    {
-      "name": "新作榜"
-    },
-    {
-      "name": "上升榜"
-    },
-    {
-      "name": "月票榜"
-    },
-    {
-      "name": "打赏榜"
-    },
-    {
-      "name": "评分榜"
-    },
-    {
-      "name": "付费榜"
-    }
+    { "id": "popular", "name": "人气榜" },
+    { "id": "collection", "name": "收藏榜" },
+    { "id": "latest", "name": "新作榜" },
+    { "id": "ascension", "name": "上升榜" },
+    { "id": "ticket", "name": "月票榜" },
+    { "id": "gratuity", "name": "打赏榜" },
+    { "id": "score", "name": "评分榜" },
+    { "id": "pay", "name": "付费榜" }
   ]
 }

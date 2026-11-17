@@ -1,28 +1,22 @@
 [
   {
-    "type": "title"
+    "type": "select",
+    "id": "category",
+    "title": "分类",
+    "options": ["全部", "耽美", "女性向"],
+    "ids": ["", "bl", "bg"]
   },
   {
     "type": "select",
-    "name": "分类",
-    "options": [
-      "全部",
-      "耽美",
-      "女性向"
-    ]
+    "id": "status",
+    "title": "状态",
+    "options": ["全部", "连载", "完结"],
+    "ids": ["", "lz", "wj"]
   },
   {
     "type": "select",
-    "name": "状态",
-    "options": [
-      "全部",
-      "连载",
-      "完结"
-    ]
-  },
-  {
-    "type": "select",
-    "name": "标签",
+    "id": "tag",
+    "title": "标签",
     "options": [
       "全部",
       "韩漫",
@@ -36,19 +30,28 @@
       "强制",
       "台漫",
       "百合"
+    ],
+    "ids": [
+      "",
+      "韓漫",
+      "會員專區",
+      "abo",
+      "幻想",
+      "職場",
+      "校園",
+      "娛樂圈",
+      "異世界",
+      "强制",
+      "台漫",
+      "百合"
     ]
   },
   {
     "type": "sort",
-    "name": "排序",
+    "id": "sort",
+    "title": "排序",
     "canAscend": false,
-    "options": [
-      "时间",
-      "热度"
-    ],
-    "default": {
-      "index": 0,
-      "ascending": false
-    }
+    "options": ["时间", "热度"],
+    "default": { "index": 0, "ascending": false }
   }
 ]
