@@ -251,9 +251,10 @@ pub fn gen_search_url(query: String, page: i32) -> String {
 
 pub fn gen_rank_url(date_type: String, page: i32) -> String {
 	format!(
-		"{}/ranks?date_type={}&limit={}&offset={}",
+		"{}/ranks?date_type={}&audience_type={}&limit={}&offset={}",
 		API_URL,
 		date_type,
+		"male",
 		30,
 		(page - 1) * 30,
 	)
