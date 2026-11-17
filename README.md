@@ -6,11 +6,15 @@ Aidoku 中文图源
 
 ## 如何使用
 
-点击 [这里](https://aidoku.app/add-source-list/?url=https://raw.githubusercontent.com/scutlzc/aidoku-zh-sources/main/public/) 将图源添加到 Aidoku 中。
+点击 [这里](https://aidoku.app/add-source-list/?url=https://raw.githubusercontent.com/scutlzc/aidoku-zh-sources/main/public/index.json) 将图源添加到 Aidoku 中。
 
-如果添加不了，可以点击 [这里](https://aidoku.app/add-source-list/?url=https://cdn.jsdelivr.net/gh/scutlzc/aidoku-zh-sources@main/public/) 试试。
+如果添加不了，可以换成下面任意一个地址：
 
-也可以使用 GitHub Pages 地址：`https://scutlzc.github.io/aidoku-zh-sources/`。
+- GitHub Pages：`https://scutlzc.github.io/aidoku-zh-sources/`
+- jsDelivr：`https://cdn.jsdelivr.net/gh/scutlzc/aidoku-zh-sources@main/public/index.json`
+- GitHub Raw：`https://raw.githubusercontent.com/scutlzc/aidoku-zh-sources/main/public/index.json`
+
+> 注意：地址要指向 `index.json` 本身（或 GitHub Pages 的目录地址）。直接填 Raw 的目录地址（结尾是 `/public/`）会返回 404，Aidoku 会提示「添加来源列表失败」。
 
 ## 图源列表
 
