@@ -150,7 +150,7 @@ impl Source for Komiic {
 	) -> Result<MangaPageResult> {
 		let mut category = String::new();
 		let mut status = String::new();
-		let mut order_by = String::new();
+		let mut order_by = String::from(FILTER_ORDER_BY[0]);
 
 		for filter in filters {
 			match filter {

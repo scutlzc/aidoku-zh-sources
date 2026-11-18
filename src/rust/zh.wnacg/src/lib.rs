@@ -9,7 +9,7 @@ use aidoku::{
 	MangaPageResult, MangaStatus, Page, PageContent, PageContext, Result, Source, Viewer,
 };
 
-const WWW_URL: &str = "https://www.wnacg01.cc";
+const WWW_URL: &str = "https://www.wnacg.com";
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
 const FILTER_CATEGORY_5: [&str; 4] = ["5", "1", "12", "16"];

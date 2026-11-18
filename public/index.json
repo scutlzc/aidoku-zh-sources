@@ -15,19 +15,6 @@
       "minAppVersion": "0.7"
     },
     {
-      "id": "zh.55dmh",
-      "name": "无敌漫画",
-      "version": 3,
-      "iconURL": "icons/zh.55dmh-v3.png",
-      "downloadURL": "sources/zh.55dmh-v3.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 0,
-      "baseURL": "https://www.55dmh.com",
-      "minAppVersion": "0.7"
-    },
-    {
       "id": "zh.bakamh",
       "name": "巴卡漫画",
       "version": 3,
@@ -80,19 +67,6 @@
       "minAppVersion": "0.7"
     },
     {
-      "id": "zh.cartoonmad",
-      "name": "动漫狂",
-      "version": 3,
-      "iconURL": "icons/zh.cartoonmad-v3.png",
-      "downloadURL": "sources/zh.cartoonmad-v3.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 0,
-      "baseURL": "https://www.cartoonmad.com",
-      "minAppVersion": "0.7"
-    },
-    {
       "id": "zh.copymanga",
       "name": "拷贝漫画",
       "version": 15,
@@ -119,19 +93,6 @@
       "minAppVersion": "0.7"
     },
     {
-      "id": "zh.gufengmh",
-      "name": "古风漫画",
-      "version": 4,
-      "iconURL": "icons/zh.gufengmh-v4.png",
-      "downloadURL": "sources/zh.gufengmh-v4.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 0,
-      "baseURL": "https://www.gufengmh.com",
-      "minAppVersion": "0.7"
-    },
-    {
       "id": "zh.hanime1",
       "name": "Hanime1.me",
       "version": 4,
@@ -142,19 +103,6 @@
       ],
       "contentRating": 2,
       "baseURL": "https://hanime1.me/comics",
-      "minAppVersion": "0.7"
-    },
-    {
-      "id": "zh.happymh",
-      "name": "嗨皮漫画",
-      "version": 2,
-      "iconURL": "icons/zh.happymh-v2.png",
-      "downloadURL": "sources/zh.happymh-v2.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 0,
-      "baseURL": "https://m.happymh.com",
       "minAppVersion": "0.7"
     },
     {
@@ -173,9 +121,9 @@
     {
       "id": "zh.komiic",
       "name": "Komiic漫画",
-      "version": 4,
-      "iconURL": "icons/zh.komiic-v4.png",
-      "downloadURL": "sources/zh.komiic-v4.aix",
+      "version": 5,
+      "iconURL": "icons/zh.komiic-v5.png",
+      "downloadURL": "sources/zh.komiic-v5.aix",
       "languages": [
         "zh"
       ],
@@ -197,19 +145,6 @@
       "minAppVersion": "0.7"
     },
     {
-      "id": "zh.manhuadb",
-      "name": "漫画DB",
-      "version": 2,
-      "iconURL": "icons/zh.manhuadb-v2.png",
-      "downloadURL": "sources/zh.manhuadb-v2.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 1,
-      "baseURL": "https://www.manhuadb.com",
-      "minAppVersion": "0.7"
-    },
-    {
       "id": "zh.manhuaren",
       "name": "漫画人",
       "version": 3,
@@ -220,19 +155,6 @@
       ],
       "contentRating": 0,
       "baseURL": "https://www.manhuaren.com",
-      "minAppVersion": "0.7"
-    },
-    {
-      "id": "zh.miaoshangmanhua",
-      "name": "喵上漫画",
-      "version": 6,
-      "iconURL": "icons/zh.miaoshangmanhua-v6.png",
-      "downloadURL": "sources/zh.miaoshangmanhua-v6.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 0,
-      "baseURL": "https://www.miaoshangmanhua.cc",
       "minAppVersion": "0.7"
     },
     {
@@ -251,9 +173,9 @@
     {
       "id": "zh.msxhm",
       "name": "漫小肆韩漫",
-      "version": 7,
-      "iconURL": "icons/zh.msxhm-v7.png",
-      "downloadURL": "sources/zh.msxhm-v7.aix",
+      "version": 8,
+      "iconURL": "icons/zh.msxhm-v8.png",
+      "downloadURL": "sources/zh.msxhm-v8.aix",
       "languages": [
         "zh"
       ],
@@ -264,9 +186,9 @@
     {
       "id": "zh.mycomic",
       "name": "MYCOMIC",
-      "version": 3,
-      "iconURL": "icons/zh.mycomic-v3.png",
-      "downloadURL": "sources/zh.mycomic-v3.aix",
+      "version": 4,
+      "iconURL": "icons/zh.mycomic-v4.png",
+      "downloadURL": "sources/zh.mycomic-v4.aix",
       "languages": [
         "zh"
       ],
@@ -301,19 +223,6 @@
       "minAppVersion": "0.7"
     },
     {
-      "id": "zh.se8",
-      "name": "韩漫库",
-      "version": 4,
-      "iconURL": "icons/zh.se8-v4.png",
-      "downloadURL": "sources/zh.se8-v4.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 2,
-      "baseURL": "https://se8.us",
-      "minAppVersion": "0.7"
-    },
-    {
       "id": "zh.vomicmh",
       "name": "vomic漫画",
       "version": 2,
@@ -329,14 +238,14 @@
     {
       "id": "zh.wnacg",
       "name": "绅士漫画",
-      "version": 5,
-      "iconURL": "icons/zh.wnacg-v5.png",
-      "downloadURL": "sources/zh.wnacg-v5.aix",
+      "version": 6,
+      "iconURL": "icons/zh.wnacg-v6.png",
+      "downloadURL": "sources/zh.wnacg-v6.aix",
       "languages": [
         "zh"
       ],
       "contentRating": 2,
-      "baseURL": "https://www.wnacg01.cc",
+      "baseURL": "https://www.wnacg.com",
       "minAppVersion": "0.7"
     },
     {

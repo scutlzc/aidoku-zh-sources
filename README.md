@@ -19,33 +19,43 @@ Aidoku 中文图源
 ## 图源列表
 
 - [18漫画](https://18mh.org)
-- ~~[139漫画](https://139mh.com)~~（站点已停止服务，源已移除）
-- ~~[无敌漫画](https://www.55dmh.com)~~
 - [巴卡漫画](https://bakamh.com)
 - [包子漫画1](https://www.baozimh.com)
 - [包子漫画2](https://baozimh.org)
 - [哔哩漫画](https://www.bilimanga.net)
-- [动漫狂](https://www.cartoonmad.com)
 - [拷贝漫画](https://www.mangacopy.com)（需在源设置里登入账号才能看章节与图片，站点已限制未登入阅读）
 - [G站漫画](https://godamh.com)
-- [古风漫画](https://www.gufengmh.com)
 - [Hanime1.me](https://hanime1.me/comics)
-- [嗨皮漫画](https://m.happymh.com)
 - [HO5HO](https://www.ho5ho.com)
 - [Komiic漫画](https://komiic.com)
 - [哔咔漫画](https://manhuabika.com)
-- [漫画DB](https://www.manhuadb.com)
 - [漫画人](https://www.manhuaren.com)
-- ~~[喵上漫画](https://www.miaoshangmanhua.cc)~~
 - [漫客栈](https://www.mkzhan.com)
 - [漫小肆韩漫](https://www.freexcomic.com)
-- ~~[Nico](https://nicohub.cc/index?category=comic)~~
 - [MYCOMIC](https://mycomic.com/cn)
 - [NoyAcg](https://noy1.top)
-- [韩漫库](https://se8.us)
-- ~~[vomic漫画](http://www.vomicmh.com)~~
 - [绅士漫画](https://www.wnacg.com)
 - [言耽社](https://yandanshe.com)
-- ~~[野蛮漫画](https://yemancomic.com)~~
 - [再漫画](https://www.zaimanhua.com)
 - [zero搬运网](https://zerobyw.github.io)
+- [Nico](https://nicohub.cc/index?category=comic)
+- [vomic漫画](http://www.vomicmh.com)
+- [野蛮漫画](https://yemancomic.com)
+
+### 站点维护中（可能取不到数据）
+
+下面这些源的站点在 2026-11 体检时返回 Cloudflare / JS 挑战（403、`Just a moment...`、`正在验证浏览器`），源本身没有改动空间，等站点放开：
+
+- 18漫画、巴卡漫画、包子漫画1、Hanime1.me、Nico
+
+### 已移除（站点已停运或域名停放）
+
+- ~~139漫画~~ `139mh.com`：域名停放，接口返回广告跳转
+- ~~无敌漫画~~ `55dmh.com`：域名被劫持，跳随机站点
+- ~~古风漫画~~ `gufengmh.com`：DNS 无记录
+- ~~嗨皮漫画~~ `happymh.com`：DNS 无记录
+- ~~漫画DB~~ `manhuadb.com`：域名停放
+- ~~喵上漫画~~ `miaoshangmanhua.cc`：注册局 NXDOMAIN
+- ~~动漫狂~~ `cartoonmad.com`：域名在 GoDaddy 挂售
+- ~~韩漫库~~ `se8.us`：站点公告停止运行
+

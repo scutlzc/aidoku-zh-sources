@@ -36,8 +36,9 @@ impl Source for Mxshm {
 		filters: Vec<FilterValue>,
 	) -> Result<MangaPageResult> {
 		let mut tag = String::new();
-		let mut area = String::new();
-		let mut end = String::new();
+		// the site only accepts -1 for "all" on area/end; empty values return an empty list
+		let mut area = String::from("-1");
+		let mut end = String::from("-1");
 
 		for filter in filters {
 			if let FilterValue::Select { id, value } = filter {

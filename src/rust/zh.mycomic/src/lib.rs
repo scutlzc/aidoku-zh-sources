@@ -72,6 +72,21 @@ const FILTER_SORT: [&str; 3] = ["", "update", "views"];
 
 struct MyComic;
 
+impl MyComic {
+	fn gen_request(url: &str) -> Result<Request> {
+		Ok(Request::new(url, HttpMethod::Get)?
+			.header("User-Agent", parser::UA)
+			.header(
+				"Accept",
+				"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+			)
+			.header("Accept-Language", "zh-CN,zh;q=0.9")
+			.header("Sec-Fetch-Site", "none")
+			.header("Sec-Fetch-Mode", "navigate")
+			.header("Sec-Fetch-Dest", "document"))
+	}
+}
+
 impl Source for MyComic {
 	fn new() -> Self {
 		Self
@@ -138,7 +153,7 @@ impl Source for MyComic {
 				page
 			)
 		};
-		let document: Document = Request::new(url.as_str(), HttpMethod::Get)?.html()?;
+		let document: Document = MyComic::gen_request(&url)?.html()?;
 
 		Ok(MangaPageResult {
 			entries: parser::parse_manga_list(document),
@@ -154,14 +169,14 @@ impl Source for MyComic {
 	) -> Result<Manga> {
 		if needs_details {
 			let url = format!("{}/comics/{}", parser::WWW_URL, manga.key);
-			let document: Document = Request::new(url.as_str(), HttpMethod::Get)?.html()?;
+			let document: Document = MyComic::gen_request(&url)?.html()?;
 			let key = manga.key.clone();
 			manga.copy_from(parser::parse_manga(key, document));
 		}
 
 		if needs_chapters {
 			let url = format!("{}/comics/{}", parser::WWW_URL, manga.key);
-			let document: Document = Request::new(url.as_str(), HttpMethod::Get)?.html()?;
+			let document: Document = MyComic::gen_request(&url)?.html()?;
 			manga.chapters = Some(parser::parse_chapter_list(document));
 		}
 
@@ -170,7 +185,7 @@ impl Source for MyComic {
 
 	fn get_page_list(&self, _manga: Manga, chapter: Chapter) -> Result<Vec<Page>> {
 		let url = format!("{}/chapters/{}", parser::WWW_URL, chapter.key);
-		let document: Document = Request::new(url.as_str(), HttpMethod::Get)?.html()?;
+		let document: Document = MyComic::gen_request(&url)?.html()?;
 
 		Ok(parser::parse_page_list(document))
 	}
@@ -178,7 +193,7 @@ impl Source for MyComic {
 
 impl ImageRequestProvider for MyComic {
 	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
-		Ok(Request::get(url)?.header("Referer", parser::WWW_URL))
+		Ok(MyComic::gen_request(&url)?.header("Referer", parser::WWW_URL))
 	}
 }
 
