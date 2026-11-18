@@ -2,19 +2,6 @@
   "name": "Source List",
   "sources": [
     {
-      "id": "zh.139mh",
-      "name": "139漫画",
-      "version": 2,
-      "iconURL": "icons/zh.139mh-v2.png",
-      "downloadURL": "sources/zh.139mh-v2.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 0,
-      "baseURL": "https://139mh.com",
-      "minAppVersion": "0.7"
-    },
-    {
       "id": "zh.18mh",
       "name": "18漫画",
       "version": 2,
