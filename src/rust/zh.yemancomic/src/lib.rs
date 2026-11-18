@@ -2,7 +2,7 @@
 
 use aidoku::{
 	alloc::{string::ToString, String, Vec},
-	helpers::uri::encode_uri,
+	helpers::uri::{encode_uri, encode_uri_component},
 	imports::net::Request,
 	prelude::*,
 	Chapter, ContentRating, FilterValue, Listing, ListingProvider, Manga, MangaPageResult,
@@ -11,36 +11,55 @@ use aidoku::{
 use serde_json::Value;
 
 const WWW_URL: &str = "https://yemancomic.com";
+/// 桌面 UA 会被 307 到 baidu.com，只有移动端 UA 才返回图源页面
+const UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";
+/// 阅读接口每次最多返回 10 张图
+const PICS_PER_REQUEST: usize = 10;
+
+fn get(url: &str) -> Result<Request> {
+	Ok(Request::get(url)?.header("User-Agent", UA))
+}
+
+fn post(url: &str) -> Result<Request> {
+	Ok(Request::post(url)?
+		.header("User-Agent", UA)
+		.header("Content-Type", "application/x-www-form-urlencoded"))
+}
+
+/// 从 `/book/72343/`、`/chapter/72343/2362660.html` 这类链接里取出 id
+fn key_from_href(href: &str) -> String {
+	let mut last = "";
+	for part in href.split("/") {
+		let part = part.split("?").next().unwrap_or_default();
+		if !part.is_empty() {
+			last = part;
+		}
+	}
+	last.split(".").next().unwrap_or_default().to_string()
+}
 
 struct Yemancomic;
 
 impl Yemancomic {
 	fn parse_list(url: &str) -> Result<Vec<Manga>> {
-		let html = Request::get(url)?.html()?;
+		let html = get(url)?.html()?;
 		let mut entries: Vec<Manga> = Vec::new();
 
-		let Some(items) = html.select(".acgn-item") else {
+		let Some(items) = html.select(".comic-item") else {
 			return Ok(entries);
 		};
 
 		for item in items {
-			let Some(href) = item
-				.select_first(".acgn-thumbnail")
-				.and_then(|a| a.attr("href"))
-			else {
+			let Some(href) = item.select_first("a").and_then(|a| a.attr("href")) else {
 				continue;
 			};
-			let mut parts: Vec<String> = href
-				.split("/")
-				.filter(|a| !a.is_empty())
-				.map(|a| a.to_string())
-				.collect();
-			let key = parts.pop().unwrap_or_default();
-			let cover = item
-				.select_first(".acgn-thumbnail>img")
-				.and_then(|img| img.attr("src"));
+			let key = key_from_href(&href);
+			if key.is_empty() {
+				continue;
+			}
+			let cover = item.select_first("img.img").and_then(|img| img.attr("src"));
 			let title = item
-				.select_first(".acgn-info>.acgn-title>a")
+				.select_first("p.title")
 				.and_then(|title| title.text())
 				.unwrap_or_default()
 				.trim()
@@ -57,38 +76,40 @@ impl Yemancomic {
 	}
 
 	fn parse_top(url: &str) -> Result<Vec<Manga>> {
-		let html = Request::get(url)?.html()?;
+		let html = get(url)?.html()?;
 		let mut entries: Vec<Manga> = Vec::new();
 
-		let Some(items) = html.select(".acgn-item") else {
+		// 榜单前三名有封面图，其余条目只有书名和链接
+		let mut covers: Vec<(String, String)> = Vec::new();
+		if let Some(items) = html.select(".comic-item") {
+			for item in items {
+				let Some(href) = item.select_first("a").and_then(|a| a.attr("href")) else {
+					continue;
+				};
+				let Some(cover) = item.select_first("img").and_then(|img| img.attr("src")) else {
+					continue;
+				};
+				covers.push((key_from_href(&href), cover));
+			}
+		}
+
+		let Some(items) = html.select(".comic-name>a") else {
 			return Ok(entries);
 		};
 
 		for item in items {
-			let Some(href) = item
-				.select_first(".acgn-thumbnail")
-				.and_then(|a| a.attr("href"))
-			else {
+			let Some(href) = item.attr("href") else {
 				continue;
 			};
-			let mut parts: Vec<String> = href
-				.split("/")
-				.filter(|a| !a.is_empty())
-				.map(|a| a.to_string())
-				.collect();
-			let key = parts.pop().unwrap_or_default();
-			let cover = item
-				.select_first(".acgn-thumbnail>img")
-				.and_then(|img| img.attr("src"));
-			let title = item
-				.select_first(".acgn-info>.acgn-title>a")
-				.and_then(|title| title.attr("title"))
-				.unwrap_or_default()
-				.split(",")
-				.map(|a| a.to_string())
-				.collect::<Vec<String>>()
-				.pop()
-				.unwrap_or_default();
+			let key = key_from_href(&href);
+			if key.is_empty() {
+				continue;
+			}
+			let title = item.text().unwrap_or_default().trim().to_string();
+			let cover = covers
+				.iter()
+				.find(|(cover_key, _)| cover_key == &key)
+				.map(|(_, cover)| cover.to_string());
 			entries.push(Manga {
 				key,
 				cover,
@@ -102,11 +123,8 @@ impl Yemancomic {
 
 	fn parse_search(query: &str) -> Result<Vec<Manga>> {
 		let url = format!("{WWW_URL}/api/front/index/search");
-		let body = format!("key={query}");
-		let json: Value = Request::post(url)?
-			.header("Content-Type", "application/x-www-form-urlencoded")
-			.body(body.as_bytes())
-			.json_owned::<Value>()?;
+		let body = format!("key={}", encode_uri_component(query));
+		let json: Value = post(&url)?.body(body.as_bytes()).json_owned::<Value>()?;
 		let mut entries: Vec<Manga> = Vec::new();
 
 		let Some(list) = json.get("data").and_then(|data| data.as_array()) else {
@@ -195,7 +213,7 @@ impl Source for Yemancomic {
 		let url = format!("{WWW_URL}/book/{}/", manga.key);
 
 		if needs_details || needs_chapters {
-			let html = Request::get(&url)?.html()?;
+			let html = get(&url)?.html()?;
 
 			if needs_details {
 				manga.cover = html
@@ -248,17 +266,26 @@ impl Source for Yemancomic {
 
 			if needs_chapters {
 				let mut chapters: Vec<Chapter> = Vec::new();
-				if let Some(list) = html.select(".chapter-list>li") {
+				if let Some(list) = html.select(".comic-chapter-link") {
 					for (index, item) in list.enumerate() {
-						let Some(chapter_id) = item.attr("data-chapter") else {
+						let Some(href) = item.attr("href") else {
 							continue;
 						};
-						let title = item.select_first("a").and_then(|a| a.attr("title"));
+						let chapter_id = key_from_href(&href);
+						if chapter_id.is_empty() {
+							continue;
+						}
+						let title = item.attr("title").or_else(|| item.text());
+						let chapter_url = if href.starts_with("http") {
+							href
+						} else {
+							format!("{WWW_URL}{href}")
+						};
 						chapters.push(Chapter {
-							key: chapter_id.clone(),
+							key: chapter_id,
 							title,
 							chapter_number: Some((index + 1) as f32),
-							url: Some(format!("{WWW_URL}/chapter/{}/{chapter_id}.html", manga.key)),
+							url: Some(chapter_url),
 							..Default::default()
 						});
 					}
@@ -272,19 +299,43 @@ impl Source for Yemancomic {
 	}
 
 	fn get_page_list(&self, manga: Manga, chapter: Chapter) -> Result<Vec<Page>> {
-		let url = format!("{WWW_URL}/chapter/{}/{}.html", manga.key, chapter.key);
-		let html = Request::get(url)?.html()?;
+		// 阅读页 HTML 里只有占位图，真实图片地址要分批向接口取
+		let url = format!("{WWW_URL}/api/comic/read/pics");
 		let mut pages: Vec<Page> = Vec::new();
+		let mut offset = 0usize;
 
-		if let Some(items) = html.select(".acgn-reader-chapter__item>div>img") {
-			for item in items {
-				let Some(src) = item.attr("src") else {
-					continue;
-				};
-				pages.push(Page {
-					content: PageContent::url(encode_uri(src)),
-					..Default::default()
-				});
+		while offset < 2000 {
+			let body = format!(
+				"id={}&aid={}&offset={}&limit={PICS_PER_REQUEST}",
+				encode_uri_component(&chapter.key),
+				encode_uri_component(&manga.key),
+				offset
+			);
+			let json: Value = post(&url)?.body(body.as_bytes()).json_owned::<Value>()?;
+			let Some(data) = json.get("data") else {
+				break;
+			};
+			let Some(list) = data.get("pic").and_then(|pic| pic.as_array()) else {
+				break;
+			};
+			if list.is_empty() {
+				break;
+			}
+			for item in list {
+				if let Some(src) = item.get("pic").and_then(|pic| pic.as_str()) {
+					pages.push(Page {
+						content: PageContent::url(encode_uri(src)),
+						..Default::default()
+					});
+				}
+			}
+			offset += list.len();
+			let total = data
+				.get("total")
+				.and_then(|total| total.as_i64())
+				.unwrap_or(0);
+			if total > 0 && offset as i64 >= total {
+				break;
 			}
 		}
 

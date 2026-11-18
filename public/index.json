@@ -56,9 +56,9 @@
     {
       "id": "zh.bilicomic",
       "name": "哔哩漫画",
-      "version": 5,
-      "iconURL": "icons/zh.bilicomic-v5.png",
-      "downloadURL": "sources/zh.bilicomic-v5.aix",
+      "version": 6,
+      "iconURL": "icons/zh.bilicomic-v6.png",
+      "downloadURL": "sources/zh.bilicomic-v6.aix",
       "languages": [
         "zh"
       ],
@@ -108,9 +108,9 @@
     {
       "id": "zh.ho5ho",
       "name": "HO5HO",
-      "version": 2,
-      "iconURL": "icons/zh.ho5ho-v2.png",
-      "downloadURL": "sources/zh.ho5ho-v2.aix",
+      "version": 3,
+      "iconURL": "icons/zh.ho5ho-v3.png",
+      "downloadURL": "sources/zh.ho5ho-v3.aix",
       "languages": [
         "zh"
       ],
@@ -223,19 +223,6 @@
       "minAppVersion": "0.7"
     },
     {
-      "id": "zh.vomicmh",
-      "name": "vomic漫画",
-      "version": 2,
-      "iconURL": "icons/zh.vomicmh-v2.png",
-      "downloadURL": "sources/zh.vomicmh-v2.aix",
-      "languages": [
-        "zh"
-      ],
-      "contentRating": 0,
-      "baseURL": "http://www.vomicmh.com",
-      "minAppVersion": "0.7"
-    },
-    {
       "id": "zh.wnacg",
       "name": "绅士漫画",
       "version": 6,
@@ -251,22 +238,22 @@
     {
       "id": "zh.yandanshe",
       "name": "言耽社",
-      "version": 2,
-      "iconURL": "icons/zh.yandanshe-v2.png",
-      "downloadURL": "sources/zh.yandanshe-v2.aix",
+      "version": 3,
+      "iconURL": "icons/zh.yandanshe-v3.png",
+      "downloadURL": "sources/zh.yandanshe-v3.aix",
       "languages": [
         "zh"
       ],
       "contentRating": 2,
-      "baseURL": "https://yandanshe.com",
+      "baseURL": "https://yandanshe.org",
       "minAppVersion": "0.7"
     },
     {
       "id": "zh.yemancomic",
       "name": "野蛮漫画",
-      "version": 2,
-      "iconURL": "icons/zh.yemancomic-v2.png",
-      "downloadURL": "sources/zh.yemancomic-v2.aix",
+      "version": 3,
+      "iconURL": "icons/zh.yemancomic-v3.png",
+      "downloadURL": "sources/zh.yemancomic-v3.aix",
       "languages": [
         "zh"
       ],
@@ -290,9 +277,9 @@
     {
       "id": "zh.zerobywns",
       "name": "zero搬运网",
-      "version": 9,
-      "iconURL": "icons/zh.zerobywns-v9.png",
-      "downloadURL": "sources/zh.zerobywns-v9.aix",
+      "version": 10,
+      "iconURL": "icons/zh.zerobywns-v10.png",
+      "downloadURL": "sources/zh.zerobywns-v10.aix",
       "languages": [
         "zh"
       ],

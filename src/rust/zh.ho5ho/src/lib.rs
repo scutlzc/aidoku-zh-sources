@@ -12,6 +12,7 @@ use serde_json::Value;
 
 const WWW_URL: &str = "https://www.ho5ho.com";
 const MANGA_URL: &str = "https://www.ho5ho.com/%E4%B8%AD%E5%AD%97h%E6%BC%AB";
+const GENRE_URL: &str = "https://www.ho5ho.com/h%E6%BC%AB%E5%88%86%E9%A1%9E";
 
 const FILTER_SORT: [&str; 3] = ["latest", "rating", "views"];
 
@@ -22,28 +23,31 @@ impl Ho5Ho {
 		let html = Request::get(url)?.html()?;
 		let mut entries: Vec<Manga> = Vec::new();
 
-		let Some(items) = html.select("div[class*='c-image-hover']>a") else {
+		let Some(items) = html.select("article.ho5ho-v2-card") else {
 			return Ok(entries);
 		};
 
 		for item in items {
-			let list: Vec<String> = item
-				.attr("href")
-				.unwrap_or_default()
-				.split('/')
-				.filter(|part| !part.is_empty())
-				.map(|part| part.to_string())
-				.collect();
-			let Some(key) = list.get(3) else {
+			let Some(link) = item.select_first("a.ho5ho-v2-card-cover") else {
+				continue;
+			};
+			let href = link.attr("href").unwrap_or_default();
+			let Some(key) = href.split('/').filter(|part| !part.is_empty()).next_back() else {
 				continue;
 			};
 			let cover = item
 				.select_first("img")
-				.and_then(|img| img.attr("data-src"))
+				.and_then(|img| img.attr("src"))
+				.unwrap_or_default();
+			let title = item
+				.select_first("h3.ho5ho-v2-card-title>a")
+				.and_then(|title| title.text())
+				.or_else(|| link.attr("aria-label"))
+				.or_else(|| item.select_first("img").and_then(|img| img.attr("alt")))
 				.unwrap_or_default();
 			entries.push(Manga {
-				key: key.clone(),
-				title: item.attr("title").unwrap_or_default(),
+				key: key.to_string(),
+				title,
 				cover: Some(encode_uri(cover)),
 				..Default::default()
 			});
@@ -56,29 +60,29 @@ impl Ho5Ho {
 		let mut chapters: Vec<Chapter> = Vec::new();
 
 		if let Some(items) = html.select(".wp-manga-chapter>a") {
-			for (index, item) in items.enumerate() {
+			for item in items {
 				let url = item.attr("href").unwrap_or_default();
-				let key = url
+				let Some(key) = url
 					.split('/')
 					.filter(|part| !part.is_empty())
+					.next_back()
 					.map(|part| part.to_string())
-					.collect::<Vec<String>>()
-					.pop()
-					.unwrap_or_default();
-				if key.is_empty() {
+				else {
 					continue;
-				}
+				};
 				let title = item.text().unwrap_or_default();
 				chapters.push(Chapter {
 					key,
 					title: Some(title),
-					chapter_number: Some((index + 1) as f32),
 					url: Some(url),
 					..Default::default()
 				});
 			}
 		}
 		chapters.reverse();
+		for (index, chapter) in chapters.iter_mut().enumerate() {
+			chapter.chapter_number = Some((index + 1) as f32);
+		}
 
 		Ok(chapters)
 	}
@@ -90,8 +94,44 @@ fn substring_after<'a>(value: &'a str, pattern: &str) -> Option<&'a str> {
 		.map(|index| &value[index + pattern.len()..])
 }
 
-fn substring_before<'a>(value: &'a str, pattern: &str) -> Option<&'a str> {
-	value.find(pattern).map(|index| &value[..index])
+// 取出文本开头处的完整 JSON 数组字面量，跳过字符串内部的括号。
+// 图片数组后面紧跟的是 `, chapter_images_per_page = 3;`，不能按 `];` 截断。
+fn json_array(value: &str) -> Option<&str> {
+	let bytes = value.as_bytes();
+	let mut index = 0;
+	while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+		index += 1;
+	}
+	if bytes.get(index) != Some(&b'[') {
+		return None;
+	}
+	let start = index;
+	let mut depth = 0usize;
+	let mut in_string = false;
+	let mut escaped = false;
+	while index < bytes.len() {
+		let byte = bytes[index];
+		if in_string {
+			if escaped {
+				escaped = false;
+			} else if byte == b'\\' {
+				escaped = true;
+			} else if byte == b'"' {
+				in_string = false;
+			}
+		} else if byte == b'"' {
+			in_string = true;
+		} else if byte == b'[' {
+			depth += 1;
+		} else if byte == b']' {
+			depth -= 1;
+			if depth == 0 {
+				return Some(&value[start..index + 1]);
+			}
+		}
+		index += 1;
+	}
+	None
 }
 
 impl Source for Ho5Ho {
@@ -128,19 +168,23 @@ impl Source for Ho5Ho {
 
 		let query = query.unwrap_or_default();
 		let url = if query.is_empty() {
-			if category.is_empty() {
-				format!("{WWW_URL}/page/{page}/?m_orderby={sort}")
+			let listing = if category.is_empty() {
+				WWW_URL.to_string()
 			} else {
-				format!(
-					"{WWW_URL}/manga-genre/{}/page/{page}/?m_orderby={sort}",
-					encode_uri(category)
-				)
+				format!("{GENRE_URL}/{}", encode_uri(category))
+			};
+			if page > 1 {
+				format!("{listing}/page/{page}/?m_orderby={sort}")
+			} else {
+				format!("{listing}/?m_orderby={sort}")
 			}
-		} else {
+		} else if page > 1 {
 			format!(
 				"{WWW_URL}/page/{page}/?s={}&post_type=wp-manga",
 				encode_uri(query)
 			)
+		} else {
+			format!("{WWW_URL}/?s={}&post_type=wp-manga", encode_uri(query))
 		};
 
 		Ok(MangaPageResult {
@@ -160,54 +204,71 @@ impl Source for Ho5Ho {
 			let html = Request::get(&url)?.html()?;
 
 			if needs_details {
-				let cover = html
-					.select_first(".summary_image>a>img")
-					.and_then(|img| img.attr("data-src"))
-					.unwrap_or_default()
-					.replace("193x278", "175x238");
-				manga.cover = Some(encode_uri(cover));
-				manga.title = html
-					.select_first(".post-title>h1")
+				if let Some(title) = html
+					.select_first("h1#ho5ho-detail-title")
 					.and_then(|title| title.text())
+				{
+					manga.title = title;
+				}
+				let cover = html
+					.select_first(".ho5ho-v3-cover>img")
+					.and_then(|img| img.attr("src"))
 					.unwrap_or_default();
-				let authors = html
-					.select(".author-content>a")
-					.map(|authors| {
-						authors
-							.map(|author| author.text().unwrap_or_default())
-							.collect::<Vec<String>>()
-					})
-					.unwrap_or_default();
+				if !cover.is_empty() {
+					manga.cover = Some(encode_uri(cover));
+				}
+				let mut authors: Vec<String> = Vec::new();
+				let mut tags: Vec<String> = Vec::new();
+				if let Some(groups) = html.select("section.ho5ho-v3-taxonomy-group") {
+					for group in groups {
+						let label = group
+							.select_first("h3")
+							.and_then(|label| label.text())
+							.unwrap_or_default();
+						let terms = if label == "作者" {
+							&mut authors
+						} else {
+							&mut tags
+						};
+						if let Some(items) = group.select("div.ho5ho-v3-term-chips>a") {
+							for item in items {
+								let term = item.text().unwrap_or_default();
+								if !term.is_empty() {
+									terms.push(term);
+								}
+							}
+						}
+					}
+				}
 				manga.authors = if authors.is_empty() {
 					None
 				} else {
 					Some(authors)
 				};
-				manga.description = html
-					.select(".description-summary>div>p")
-					.map(|paragraphs| {
-						paragraphs
-							.map(|paragraph| paragraph.text().unwrap_or_default())
-							.collect::<Vec<String>>()
-					})
-					.map(|paragraphs| paragraphs.join("\n"));
-				let tags = html
-					.select(".genres-content>a")
-					.map(|tags| {
-						tags.map(|tag| tag.text().unwrap_or_default())
-							.collect::<Vec<String>>()
-					})
-					.unwrap_or_default();
 				manga.tags = if tags.is_empty() { None } else { Some(tags) };
-				manga.status = match html
-					.select_first(".post-status>div:nth-child(2)>.summary-content")
-					.and_then(|status| status.text())
-					.unwrap_or_default()
-					.trim()
-				{
-					"OnGoing" => MangaStatus::Ongoing,
-					"Completed" => MangaStatus::Completed,
-					_ => MangaStatus::Unknown,
+				// 新版详情页已移除连载状态字段，统一置为未知
+				manga.status = MangaStatus::Unknown;
+				// 新版详情页已移除简介，改用「別名」等作品资料兜底
+				let mut details: Vec<String> = Vec::new();
+				if let Some(items) = html.select(".ho5ho-v3-data-list>div") {
+					for item in items {
+						let label = item
+							.select_first("dt")
+							.and_then(|label| label.text())
+							.unwrap_or_default();
+						let value = item
+							.select_first("dd")
+							.and_then(|value| value.text())
+							.unwrap_or_default();
+						if !value.is_empty() {
+							details.push(format!("{label}：{value}"));
+						}
+					}
+				}
+				manga.description = if details.is_empty() {
+					None
+				} else {
+					Some(details.join("\n"))
 				};
 				manga.url = Some(url);
 				manga.content_rating = ContentRating::NSFW;
@@ -227,9 +288,10 @@ impl Source for Ho5Ho {
 		let text = Request::get(url)?.string()?;
 		let mut pages: Vec<Page> = Vec::new();
 
-		let Some(list) = substring_after(&text, "var chapter_preloaded_images = ")
-			.and_then(|text| substring_before(text, ", chapter_images_per_page ="))
-		else {
+		let Some(list) = substring_after(&text, "var chapter_preloaded_images = ") else {
+			return Ok(pages);
+		};
+		let Some(list) = json_array(list) else {
 			return Ok(pages);
 		};
 

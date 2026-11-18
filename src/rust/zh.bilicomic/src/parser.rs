@@ -249,25 +249,21 @@ pub fn parse_manga(key: String, document: &Document) -> Manga {
 		.join(", ");
 	let description = doc_text(document, ".book-summary>content");
 	let categories = document
-		.select(".tag-small-group>.tag-small>a")
+		.select(".tag-small-group>a")
 		.map(|list| {
 			list.map(|node| node.text().unwrap_or_default())
 				.collect::<Vec<String>>()
 		})
 		.unwrap_or_default();
+	// The meta line is now "連載於2017年·收藏 0·推薦 0·連載中" (or "…·已完結·已動畫化"),
+	// so the state is a substring of the whole line rather than a pipe separated field.
 	let status_text = doc_text(document, ".book-layout-inline");
-	let first_status = status_text
-		.trim()
-		.split('|')
-		.map(|part| part.trim().to_string())
-		.collect::<Vec<String>>()
-		.first()
-		.cloned()
-		.unwrap_or_default();
-	let status = match first_status.as_str() {
-		"連載" => MangaStatus::Ongoing,
-		"完結" => MangaStatus::Completed,
-		_ => MangaStatus::Unknown,
+	let status = if status_text.contains("完結") {
+		MangaStatus::Completed
+	} else if status_text.contains("連載") {
+		MangaStatus::Ongoing
+	} else {
+		MangaStatus::Unknown
 	};
 	let content_rating = ContentRating::Safe;
 	let viewer = Viewer::RightToLeft;

@@ -2,9 +2,9 @@
   "info": {
     "id": "zh.yandanshe",
     "name": "言耽社",
-    "version": 2,
+    "version": 3,
     "minAppVersion": "0.7",
-    "url": "https://yandanshe.com",
+    "url": "https://yandanshe.org",
     "contentRating": 2,
     "languages": ["zh"]
   }

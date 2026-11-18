@@ -2,7 +2,6 @@
 
 use aidoku::{
 	alloc::{string::ToString, String, Vec},
-	helpers::uri::encode_uri,
 	imports::{
 		html::Document,
 		net::{HttpMethod, Request},
@@ -176,32 +175,29 @@ impl Source for BiliComic {
 			}
 		}
 
-		let by_filter = query.is_empty();
-		let url = if by_filter {
-			format!(
-				"{}/filter/{}_{}_{}_{}_{}_{}_{}_{}_{}_0.html",
-				parser::BASE_URL,
-				order,
-				tagid,
-				isfull,
-				anime,
-				rgroupid,
-				sortid,
-				update,
-				quality,
-				page
-			)
-		} else {
-			format!(
-				"{}/search/{}_{}.html",
-				parser::BASE_URL,
-				encode_uri(query),
-				page
-			)
-		};
-		let referer = format!("{}/search.html", parser::BASE_URL);
+		if !query.is_empty() {
+			bail!("站點搜尋已改為圖形驗證碼校驗，暫不可用；請清空關鍵字改用篩選瀏覽");
+		}
+
+		// The filter path now carries twelve slots:
+		// order, tagid, isfull, anime, rgroupid, sortid, update, quality, page,
+		// unused(0), pubtime, inmatch.
+		let url = format!(
+			"{}/filter/{}_{}_{}_{}_{}_{}_{}_{}_{}_0_0_0.html",
+			parser::BASE_URL,
+			order,
+			tagid,
+			isfull,
+			anime,
+			rgroupid,
+			sortid,
+			update,
+			quality,
+			page
+		);
+		let referer = format!("{}/filter/", parser::BASE_URL);
 		let document = BiliComic::fetch_html(url, Some(referer))?;
-		let (entries, has_next_page) = parser::parse_search_list(&document, by_filter);
+		let (entries, has_next_page) = parser::parse_search_list(&document, true);
 
 		Ok(MangaPageResult {
 			entries,
@@ -265,8 +261,11 @@ impl ListingProvider for BiliComic {
 
 impl ImageRequestProvider for BiliComic {
 	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
+		// The image host (w.motiezw.com) is behind Cloudflare and rejects requests
+		// without an Accept-Language header.
 		Ok(Request::get(url)?
 			.header("User-Agent", parser::UA)
+			.header("Accept-Language", "zh-CN,zh;q=0.9")
 			.header("Referer", parser::BASE_URL))
 	}
 }

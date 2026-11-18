@@ -39,7 +39,6 @@ Aidoku 中文图源
 - [再漫画](https://www.zaimanhua.com)
 - [zero搬运网](https://zerobyw.github.io)
 - [Nico](https://nicohub.cc/index?category=comic)
-- [vomic漫画](http://www.vomicmh.com)
 - [野蛮漫画](https://yemancomic.com)
 
 ### 站点维护中（可能取不到数据）
@@ -58,4 +57,5 @@ Aidoku 中文图源
 - ~~喵上漫画~~ `miaoshangmanhua.cc`：注册局 NXDOMAIN
 - ~~动漫狂~~ `cartoonmad.com`：域名在 GoDaddy 挂售
 - ~~韩漫库~~ `se8.us`：站点公告停止运行
+- ~~vomic漫画~~ `vomicmh.com`：数据接口整体下线，站点改为纯前端页面，无可用的读取入口
 
